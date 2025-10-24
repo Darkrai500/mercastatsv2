@@ -1,14 +1,24 @@
 [package]
 name = "mercastats"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [workspace]
-members = ["backend"]
+members = ["backend", "frontend"]
 resolver = "2"
 
-[dependencies]
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
 # Dependencias compartidas entre miembros del workspace
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "chrono", "uuid", "migrate"] }
+
+[profile.release]
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = "abort"

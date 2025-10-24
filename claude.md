@@ -604,6 +604,18 @@ Este proyecto está en **fase inicial de desarrollo**. El objetivo es construir 
 - ✅ Dark mode nativo con clase `dark:`
 - ✅ Ecosistema maduro con miles de componentes pre-hechos
 - ✅ Integración perfecta con Leptos/WASM
+  **Aplicaciones a estudiar:**
+- [Linear](https://linear.app/) - Dashboard minimalista perfecto
+- [Stripe Dashboard](https://dashboard.stripe.com/) - Datos profesionales
+- [Cal.com](https://cal.com/) - UI moderna y limpia
+- [Vercel](https://vercel.com/dashboard) - Espacios en blanco magistrales
+
+**Recursos de Tailwind:**
+
+- [Tailwind UI](https://tailwindui.com/) - Componentes premium (algunos gratis)
+- [Headless UI](https://headlessui.com/) - Componentes accesibles sin estilos
+- [Flowbite](https://flowbite.com/) - Componentes Tailwind gratuitos
+- [DaisyUI](https://daisyui.com/) - Si necesitas componentes más complejos
 
 ---
 
