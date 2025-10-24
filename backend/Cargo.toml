@@ -27,6 +27,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Fechas
 chrono = { version = "0.4", features = ["serde"] }
 
+# Autenticación
+bcrypt = "0.15"
+jsonwebtoken = "9.2"
+validator = { version = "0.18", features = ["derive"] }
+
 # Errores
 thiserror = "1.0"
 anyhow = "1.0"
