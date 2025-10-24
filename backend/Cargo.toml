@@ -1,0 +1,32 @@
+[package]
+name = "mercastats-backend"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Framework web
+axum = "0.7"
+tokio = { workspace = true }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Base de datos
+sqlx = { workspace = true }
+
+# Serialización
+serde = { workspace = true }
+serde_json = "1.0"
+
+# Env
+dotenvy = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Fechas
+chrono = { version = "0.4", features = ["serde"] }
+
+# Errores
+thiserror = "1.0"
+anyhow = "1.0"
