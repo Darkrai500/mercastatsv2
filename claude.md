@@ -581,6 +581,30 @@ Este proyecto está en **fase inicial de desarrollo**. El objetivo es construir 
 
 **Claude Code**, tu misión es ayudar a construir un backend robusto, mantenible y bien documentado siguiendo las mejores prácticas de la industria. ¡Adelante! 🦀
 
+## 🎨 Desarrollo Frontend
+
+### 🎯 Filosofía de Diseño: Minimalista y Moderno
+
+**Mercastats sigue un enfoque de diseño minimalista inspirado en:**
+
+- 🎨 **Apple** - Espacios en blanco, tipografía limpia
+- 📊 **Linear** - Interfaz focalizada, animaciones sutiles
+- 💎 **Stripe** - Profesional, datos como protagonistas
+- 🌊 **Calm** - Colores suaves, experiencia relajante
+
+### 🛠️ Stack de Estilado Decidido
+
+#### Tailwind CSS (Principal - Seleccionado)
+
+**Por qué Tailwind:**
+
+- ✅ Utility-first: desarrollo rápido sin salir del HTML
+- ✅ Purge CSS: bundles pequeños en producción (~10KB)
+- ✅ Responsive design con prefijos simples (sm:, md:, lg:)
+- ✅ Dark mode nativo con clase `dark:`
+- ✅ Ecosistema maduro con miles de componentes pre-hechos
+- ✅ Integración perfecta con Leptos/WASM
+
 ---
 
 **Última actualización**: 24 de octubre de 2025  
