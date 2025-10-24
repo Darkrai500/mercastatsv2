@@ -38,7 +38,7 @@ pub fn Login() -> impl IntoView {
         let navigate_for_spawn = navigate_clone.clone();
         spawn_local(async move {
             let request = LoginRequest {
-                email: email_val.clone(),
+                email: email_val.to_lowercase(),
                 password: password_val.clone(),
             };
 
