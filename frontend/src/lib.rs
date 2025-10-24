@@ -6,7 +6,7 @@ use leptos::*;
 use leptos_router::*;
 use leptos_meta::*;
 use wasm_bindgen::prelude::*;
-use pages::{Login, Upload};
+use pages::{Login, Register, Upload};
 
 #[wasm_bindgen(start)]
 pub fn main() {
@@ -35,6 +35,7 @@ fn App() -> impl IntoView {
 
             <Routes>
                 <Route path="/" view=Login />
+                <Route path="/register" view=Register />
                 <Route path="/upload" view=Upload />
                 <Route path="/*any" view=NotFound />
             </Routes>

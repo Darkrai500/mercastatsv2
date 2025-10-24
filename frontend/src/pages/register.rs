@@ -1,12 +1,14 @@
 use leptos::*;
 use leptos_router::*;
 use crate::components::{Button, ButtonVariant, Card};
-use crate::api::auth::{login_user, LoginRequest};
+use crate::api::auth::{register_user, RegisterRequest};
 
 #[component]
-pub fn Login() -> impl IntoView {
+pub fn Register() -> impl IntoView {
     let (email, set_email) = create_signal(String::new());
     let (password, set_password) = create_signal(String::new());
+    let (confirm_password, set_confirm_password) = create_signal(String::new());
+    let (nombre, set_nombre) = create_signal(String::new());
     let (error, set_error) = create_signal(None::<String>);
     let (loading, set_loading) = create_signal(false);
 
@@ -21,9 +23,11 @@ pub fn Login() -> impl IntoView {
 
         let email_val = email.get();
         let password_val = password.get();
+        let confirm_password_val = confirm_password.get();
+        let nombre_val = nombre.get();
 
         // Validación básica
-        if email_val.is_empty() || password_val.is_empty() {
+        if email_val.is_empty() || password_val.is_empty() || nombre_val.is_empty() {
             set_error.set(Some("Por favor, completa todos los campos".to_string()));
             set_loading.set(false);
             return;
@@ -35,26 +39,31 @@ pub fn Login() -> impl IntoView {
             return;
         }
 
+        if password_val.len() < 8 {
+            set_error.set(Some("La contraseña debe tener al menos 8 caracteres".to_string()));
+            set_loading.set(false);
+            return;
+        }
+
+        if password_val != confirm_password_val {
+            set_error.set(Some("Las contraseñas no coinciden".to_string()));
+            set_loading.set(false);
+            return;
+        }
+
         let navigate_for_spawn = navigate_clone.clone();
         spawn_local(async move {
-            let request = LoginRequest {
+            let request = RegisterRequest {
                 email: email_val.clone(),
                 password: password_val.clone(),
+                nombre: Some(nombre_val.clone()),
             };
 
-            match login_user(request).await {
-                Ok(response) => {
-                    // Guardar token en localStorage
-                    if let Some(window) = web_sys::window() {
-                        if let Ok(Some(storage)) = window.local_storage() {
-                            let _ = storage.set_item("auth_token", &response.token);
-                            let _ = storage.set_item("user_email", &email_val);
-                        }
-                    }
-
+            match register_user(request).await {
+                Ok(_response) => {
                     set_loading.set(false);
-                    // Navegar a la página de upload
-                    navigate_for_spawn("/upload", Default::default());
+                    // Navegar a la página de login
+                    navigate_for_spawn("/", Default::default());
                 }
                 Err(err) => {
                     set_error.set(Some(err));
@@ -82,12 +91,12 @@ pub fn Login() -> impl IntoView {
                     </p>
                 </div>
 
-                // Card de login
+                // Card de registro
                 <Card>
                     <form on:submit=handle_submit class="space-y-6">
                         <div class="text-center mb-6">
                             <h2 class="text-xl font-semibold text-gray-900">
-                                "Iniciar sesión"
+                                "Crear cuenta"
                             </h2>
                         </div>
 
@@ -96,6 +105,21 @@ pub fn Login() -> impl IntoView {
                                 <p class="text-sm text-red-800 text-center">{err}</p>
                             </div>
                         })}
+
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                "Nombre completo"
+                                <span class="text-red-500 ml-1">"*"</span>
+                            </label>
+                            <input
+                                type="text"
+                                class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white text-gray-900 placeholder-gray-400"
+                                placeholder="Juan Pérez"
+                                value={move || nombre.get()}
+                                on:input=move |ev| set_nombre.set(event_target_value(&ev))
+                                autocomplete="name"
+                            />
+                        </div>
 
                         <div class="space-y-1">
                             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -123,18 +147,26 @@ pub fn Login() -> impl IntoView {
                                 placeholder="••••••••"
                                 value={move || password.get()}
                                 on:input=move |ev| set_password.set(event_target_value(&ev))
-                                autocomplete="current-password"
+                                autocomplete="new-password"
                             />
+                            <p class="mt-2 text-xs text-gray-500">
+                                "Mínimo 8 caracteres"
+                            </p>
                         </div>
 
-                        <div class="flex items-center justify-between text-sm">
-                            <label class="flex items-center">
-                                <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-                                <span class="ml-2 text-gray-600">"Recordarme"</span>
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                "Confirmar contraseña"
+                                <span class="text-red-500 ml-1">"*"</span>
                             </label>
-                            <a href="#" class="text-primary-600 hover:text-primary-700 font-medium">
-                                "¿Olvidaste tu contraseña?"
-                            </a>
+                            <input
+                                type="password"
+                                class="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white text-gray-900 placeholder-gray-400"
+                                placeholder="••••••••"
+                                value={move || confirm_password.get()}
+                                on:input=move |ev| set_confirm_password.set(event_target_value(&ev))
+                                autocomplete="new-password"
+                            />
                         </div>
 
                         <Button
@@ -143,7 +175,7 @@ pub fn Login() -> impl IntoView {
                             loading=loading.get()
                             disabled=loading.get()
                         >
-                            {move || if loading.get() { "Iniciando sesión..." } else { "Iniciar sesión" }}
+                            {move || if loading.get() { "Creando cuenta..." } else { "Crear cuenta" }}
                         </Button>
 
                         <div class="relative my-6">
@@ -169,9 +201,9 @@ pub fn Login() -> impl IntoView {
                         </Button>
 
                         <p class="text-center text-sm text-gray-600 mt-6">
-                            "¿No tienes cuenta? "
-                            <a href="/register" class="text-primary-600 hover:text-primary-700 font-medium">
-                                "Regístrate gratis"
+                            "¿Ya tienes cuenta? "
+                            <a href="/" class="text-primary-600 hover:text-primary-700 font-medium">
+                                "Inicia sesión"
                             </a>
                         </p>
                     </form>
@@ -179,7 +211,7 @@ pub fn Login() -> impl IntoView {
 
                 // Footer
                 <p class="text-center text-sm text-gray-500 mt-8">
-                    "Al iniciar sesión, aceptas nuestros "
+                    "Al registrarte, aceptas nuestros "
                     <a href="#" class="text-primary-600 hover:text-primary-700">"Términos"</a>
                     " y "
                     <a href="#" class="text-primary-600 hover:text-primary-700">"Política de Privacidad"</a>
