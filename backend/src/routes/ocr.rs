@@ -17,8 +17,68 @@ pub async fn process_ticket(
         .validate()
         .map_err(|err| AppError::BadRequest(format!("Validación fallida: {}", err)))?;
 
+    tracing::info!("📄 Procesando ticket: {}", payload.file_name);
+
     let request = payload.into();
     let result = process_ticket_ocr(request).await.map_err(map_ocr_error)?;
+
+    // Logging detallado del resultado
+    tracing::info!("✅ Ticket procesado exitosamente:");
+    tracing::info!("   📋 ID: {}", result.ticket_id);
+
+    if let Some(ref factura) = result.numero_factura {
+        tracing::info!("   🧾 Factura: {}", factura);
+    }
+
+    if let Some(ref fecha) = result.fecha {
+        tracing::info!("   📅 Fecha: {}", fecha);
+    }
+
+    if let Some(total) = result.total {
+        tracing::info!("   💰 Total: {:.2}€", total);
+    }
+
+    if let Some(ref tienda) = result.tienda {
+        tracing::info!("   🏪 Tienda: {}", tienda);
+        if let Some(ref ubicacion) = result.ubicacion {
+            tracing::info!("      📍 {}", ubicacion);
+        }
+    }
+
+    if let Some(ref metodo) = result.metodo_pago {
+        tracing::info!("   💳 Pago: {}", metodo);
+    }
+
+    tracing::info!("   🛒 Productos encontrados: {}", result.productos.len());
+
+    if !result.productos.is_empty() {
+        tracing::info!("   Lista de productos:");
+        for (idx, prod) in result.productos.iter().enumerate() {
+            tracing::info!(
+                "      {}. {} - {} {} × {:.2}€ = {:.2}€",
+                idx + 1,
+                prod.nombre,
+                prod.cantidad,
+                prod.unidad,
+                prod.precio_unitario,
+                prod.precio_total
+            );
+        }
+    }
+
+    if !result.iva_desglose.is_empty() {
+        tracing::info!("   📊 Desglose IVA:");
+        for iva in &result.iva_desglose {
+            tracing::info!(
+                "      {}%: Base {:.2}€ → Cuota {:.2}€",
+                iva.porcentaje,
+                iva.base_imponible,
+                iva.cuota
+            );
+        }
+    }
+
+    tracing::info!("─────────────────────────────────────────");
 
     Ok(Json(result))
 }
