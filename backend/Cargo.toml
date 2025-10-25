@@ -35,3 +35,6 @@ validator = { version = "0.18", features = ["derive"] }
 # Errores
 thiserror = "1.0"
 anyhow = "1.0"
+
+# Integración con Python
+pyo3 = { version = "0.21", features = ["auto-initialize"] }

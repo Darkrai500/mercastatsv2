@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use super::{ApiError, API_BASE_URL};
 use gloo_net::http::Request;
-use super::{API_BASE_URL, ApiError};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginRequest {

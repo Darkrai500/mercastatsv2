@@ -1,4 +1,4 @@
-use crate::api::tickets::upload_ticket;
+use crate::api::tickets::{process_ticket_ocr, ProcessTicketResponse};
 use crate::components::{Button, ButtonVariant, Card};
 use leptos::*;
 use web_sys::{File, HtmlInputElement};
@@ -7,9 +7,10 @@ use web_sys::{File, HtmlInputElement};
 pub fn Upload() -> impl IntoView {
     let (selected_file, set_selected_file) = create_signal(None::<File>);
     let (preview_url, set_preview_url) = create_signal(None::<String>);
-    let (uploading, set_uploading) = create_signal(false);
+    let (processing, set_processing) = create_signal(false);
     let (success_message, set_success_message) = create_signal(None::<String>);
     let (error_message, set_error_message) = create_signal(None::<String>);
+    let (ocr_result, set_ocr_result) = create_signal(None::<ProcessTicketResponse>);
     let (_user_email, set_user_email) = create_signal(None::<String>);
 
     // Obtener email del usuario de localStorage
@@ -54,20 +55,26 @@ pub fn Upload() -> impl IntoView {
         }
     };
 
-    let _handle_upload_click = move |_: leptos::ev::MouseEvent| {
+    let handle_process_click = move |_: leptos::ev::MouseEvent| {
         if let Some(file) = selected_file.get() {
-            set_uploading.set(true);
+            set_processing.set(true);
             set_error_message.set(None);
             set_success_message.set(None);
+            set_ocr_result.set(None);
 
             spawn_local(async move {
-                match upload_ticket(file).await {
+                match process_ticket_ocr(file).await {
                     Ok(response) => {
+                        let invoice = response.numero_factura.clone().unwrap_or_default();
+                        let total = response.total.unwrap_or(0.0);
+                        let products_count = response.productos.len();
+
                         set_success_message.set(Some(format!(
-                            "¡Ticket subido con éxito! ID: {}",
-                            response.ticket_id
+                            "¡Ticket procesado con éxito! Factura: {} | Total: {:.2}€ | {} productos",
+                            invoice, total, products_count
                         )));
-                        set_uploading.set(false);
+                        set_ocr_result.set(Some(response));
+                        set_processing.set(false);
                         set_selected_file.set(None);
                         if let Some(prev) = preview_url.get_untracked() {
                             let _ = web_sys::Url::revoke_object_url(&prev);
@@ -81,7 +88,7 @@ pub fn Upload() -> impl IntoView {
                     }
                     Err(err) => {
                         set_error_message.set(Some(err));
-                        set_uploading.set(false);
+                        set_processing.set(false);
                     }
                 }
             });
@@ -237,13 +244,14 @@ pub fn Upload() -> impl IntoView {
                                     <>
                                         <Button
                                             full_width=true
-                                            loading=uploading.get()
-                                            disabled=uploading.get()
+                                            loading=processing.get()
+                                            disabled=processing.get()
+                                            on:click=handle_process_click
                                         >
                                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                             </svg>
-                                            {move || if uploading.get() { "Subiendo..." } else { "Subir ticket" }}
+                                            {move || if processing.get() { "Procesando..." } else { "Procesar ticket" }}
                                         </Button>
                                         <Button
                                             variant=ButtonVariant::Outline
@@ -316,6 +324,101 @@ pub fn Upload() -> impl IntoView {
                     </div>
                 </Card>
             </div>
+
+            // Resultado del procesamiento OCR
+            {move || ocr_result.get().map(|result| view! {
+                <Card class="animate-slide-up bg-gradient-to-br from-green-50 to-blue-50".to_string()>
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between border-b border-gray-200 pb-4">
+                            <h2 class="text-2xl font-bold text-gray-900 flex items-center">
+                                <svg class="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                "Resultado del procesamiento"
+                            </h2>
+                        </div>
+
+                        // Información principal
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                <div class="text-sm text-gray-600 mb-1">"Factura"</div>
+                                <div class="text-xl font-bold text-gray-900">
+                                    {result.numero_factura.clone().unwrap_or_else(|| "N/A".to_string())}
+                                </div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                <div class="text-sm text-gray-600 mb-1">"Fecha"</div>
+                                <div class="text-xl font-bold text-gray-900">
+                                    {result.fecha.clone().unwrap_or_else(|| "N/A".to_string())}
+                                </div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                <div class="text-sm text-gray-600 mb-1">"Total"</div>
+                                <div class="text-xl font-bold text-primary-600">
+                                    {format!("{:.2}€", result.total.unwrap_or(0.0))}
+                                </div>
+                            </div>
+                        </div>
+
+                        // Información adicional
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                <div class="text-sm text-gray-600 mb-1">"Tienda"</div>
+                                <div class="text-base font-medium text-gray-900">
+                                    {result.tienda.clone().unwrap_or_else(|| "N/A".to_string())}
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    {result.ubicacion.clone().unwrap_or_else(|| "".to_string())}
+                                </div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                <div class="text-sm text-gray-600 mb-1">"Método de pago"</div>
+                                <div class="text-base font-medium text-gray-900">
+                                    {result.metodo_pago.clone().unwrap_or_else(|| "N/A".to_string())}
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    {result.numero_operacion.as_ref().map(|op| format!("Op: {}", op)).unwrap_or_default()}
+                                </div>
+                            </div>
+                        </div>
+
+                        // Lista de productos
+                        {if !result.productos.is_empty() {
+                            view! {
+                                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                    <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                                        <svg class="w-5 h-5 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                        </svg>
+                                        {format!("Productos ({})", result.productos.len())}
+                                    </h3>
+                                    <div class="space-y-2 max-h-96 overflow-y-auto">
+                                        {result.productos.iter().enumerate().map(|(idx, prod)| view! {
+                                            <div class="flex justify-between items-center py-2 px-3 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
+                                                <div class="flex-1">
+                                                    <div class="text-sm font-medium text-gray-900">{format!("{}. {}", idx + 1, prod.nombre.clone())}</div>
+                                                    <div class="text-xs text-gray-600">
+                                                        {format!("{} {} × {:.2}€", prod.cantidad, prod.unidad, prod.precio_unitario)}
+                                                    </div>
+                                                </div>
+                                                <div class="text-sm font-bold text-gray-900 ml-4">
+                                                    {format!("{:.2}€", prod.precio_total)}
+                                                </div>
+                                            </div>
+                                        }).collect_view()}
+                                    </div>
+                                </div>
+                            }.into_view()
+                        } else {
+                            view! {
+                                <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                                    <p class="text-sm text-yellow-800">"No se encontraron productos en el ticket."</p>
+                                </div>
+                            }.into_view()
+                        }}
+                    </div>
+                </Card>
+            })}
         </div>
     }
 }

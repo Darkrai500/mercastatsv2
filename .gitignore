@@ -1,3 +1,5 @@
 /target
 /.env
 /frontend/dist
+nul
+/docs/Tickets/*

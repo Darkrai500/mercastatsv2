@@ -1,7 +1,7 @@
-use leptos::*;
-use crate::components::Sidebar;
 use crate::components::sidebar::DashboardView;
-use crate::pages::{Upload, ExamplePage};
+use crate::components::Sidebar;
+use crate::pages::{ExamplePage, Upload};
+use leptos::*;
 
 /// Página principal del Dashboard que contiene el menú lateral y las subpáginas
 #[component]

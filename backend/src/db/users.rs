@@ -1,6 +1,6 @@
-use sqlx::PgPool;
-use crate::models::User;
 use crate::error::AppResult;
+use crate::models::User;
+use sqlx::PgPool;
 
 /// Crear un nuevo usuario en la base de datos
 pub async fn create_user(

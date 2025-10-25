@@ -57,7 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Health check
         .route("/health", get(health))
         // Rutas de autenticación
-        .nest("/api/auth", routes::auth_router(state))
+        .nest("/api/auth", routes::auth_router(state.clone()))
+        // OCR embebido
+        .nest("/api/ocr", routes::ocr_router(state.clone()))
         // CORS middleware
         .layer(CorsLayer::permissive());
 
