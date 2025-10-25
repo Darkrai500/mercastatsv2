@@ -148,50 +148,55 @@ pub fn TicketHistory() -> impl IntoView {
                                 </div>
                             }.into_view()
                         } else {
+                            // Clonar los tickets fuera del closure para evitar problemas de lifetime
+                            let tickets_clone = data.tickets.clone();
                             view! {
                                 <div class="space-y-3">
-                                    {data.tickets.iter().map(|ticket| view! {
-                                        <div class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">
-                                            <div class="flex items-center justify-between">
-                                                <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                                                    // Factura
-                                                    <div>
-                                                        <div class="text-xs text-gray-500 mb-1">"Factura"</div>
-                                                        <div class="font-semibold text-gray-900">{ticket.numero_factura.clone()}</div>
-                                                    </div>
+                                    {tickets_clone.into_iter().map(|ticket| {
+                                        let numero_factura = ticket.numero_factura.clone();
+                                        let fecha_str = ticket.fecha_hora.split('T').next().unwrap_or(&ticket.fecha_hora).to_string();
+                                        let tienda_str = ticket.tienda.clone().unwrap_or_else(|| "N/A".to_string());
+                                        let ubicacion_opt = ticket.ubicacion.clone();
+                                        let total_str = ticket.total.clone();
+                                        let num_productos_str = ticket.num_productos.map(|n| format!("{} productos", n)).unwrap_or_else(|| "N/A".to_string());
 
-                                                    // Fecha
-                                                    <div>
-                                                        <div class="text-xs text-gray-500 mb-1">"Fecha"</div>
-                                                        <div class="text-gray-900">
-                                                            {ticket.fecha_hora.split('T').next().unwrap_or(&ticket.fecha_hora)}
+                                        view! {
+                                            <div class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                        // Factura
+                                                        <div>
+                                                            <div class="text-xs text-gray-500 mb-1">"Factura"</div>
+                                                            <div class="font-semibold text-gray-900">{numero_factura}</div>
                                                         </div>
-                                                    </div>
 
-                                                    // Tienda
-                                                    <div>
-                                                        <div class="text-xs text-gray-500 mb-1">"Tienda"</div>
-                                                        <div class="text-gray-900">
-                                                            {ticket.tienda.clone().unwrap_or_else(|| "N/A".to_string())}
+                                                        // Fecha
+                                                        <div>
+                                                            <div class="text-xs text-gray-500 mb-1">"Fecha"</div>
+                                                            <div class="text-gray-900">{fecha_str}</div>
                                                         </div>
-                                                        {ticket.ubicacion.as_ref().map(|ubicacion| view! {
-                                                            <div class="text-xs text-gray-500 mt-0.5">{ubicacion.clone()}</div>
-                                                        })}
-                                                    </div>
 
-                                                    // Total
-                                                    <div class="text-right">
-                                                        <div class="text-xs text-gray-500 mb-1">"Total"</div>
-                                                        <div class="text-xl font-bold text-primary-600">
-                                                            {ticket.total.clone()}"€"
+                                                        // Tienda
+                                                        <div>
+                                                            <div class="text-xs text-gray-500 mb-1">"Tienda"</div>
+                                                            <div class="text-gray-900">{tienda_str}</div>
+                                                            {ubicacion_opt.map(|ubicacion| view! {
+                                                                <div class="text-xs text-gray-500 mt-0.5">{ubicacion}</div>
+                                                            })}
                                                         </div>
-                                                        <div class="text-xs text-gray-500">
-                                                            {ticket.num_productos.map(|n| format!("{} productos", n)).unwrap_or_else(|| "N/A".to_string())}
+
+                                                        // Total
+                                                        <div class="text-right">
+                                                            <div class="text-xs text-gray-500 mb-1">"Total"</div>
+                                                            <div class="text-xl font-bold text-primary-600">
+                                                                {total_str}"€"
+                                                            </div>
+                                                            <div class="text-xs text-gray-500">{num_productos_str}</div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        }
                                     }).collect_view()}
                                 </div>
                             }.into_view()

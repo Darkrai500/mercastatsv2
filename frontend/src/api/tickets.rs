@@ -153,6 +153,10 @@ pub struct TicketHistoryItem {
     pub created_at: String,
 }
 
+impl TicketHistoryItem {
+    // Helper para asegurar que Clone está implementado
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserStats {
     pub total_tickets: Option<i64>,
@@ -258,9 +262,6 @@ async fn file_to_base64(file: &File) -> Result<String, String> {
 
     let file_reader = web_sys::FileReader::new().map_err(|_| "Error al crear FileReader")?;
     let file_reader_rc = Rc::new(file_reader);
-
-    let result_holder: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
-    let result_holder_clone = result_holder.clone();
 
     let promise = js_sys::Promise::new(&mut |resolve, reject| {
         let file_reader_clone = file_reader_rc.clone();
