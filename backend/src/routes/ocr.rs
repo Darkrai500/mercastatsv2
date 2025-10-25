@@ -1,29 +1,110 @@
 use axum::{extract::State, routing::post, Json, Router};
+use serde::Serialize;
 use validator::Validate;
 
 use super::auth::AppState;
 use crate::{
     error::{AppError, AppResult},
-    schema::{TicketProcessPayload, TicketProcessResponse},
-    services::{process_ticket_ocr, OcrError},
+    schema::TicketProcessPayload,
+    services::{ingest_ticket, process_ticket_ocr, OcrError, TicketIngestionResponse},
 };
 
-/// Handler que procesa tickets PDF utilizando la lógica Python embebida.
+/// Respuesta extendida del procesamiento y la ingesta
+#[derive(Debug, Clone, Serialize)]
+pub struct TicketProcessAndIngestResponse {
+    /// Información del OCR
+    pub ocr: OcrResponseSummary,
+    /// Información de la ingesta (None si usuario_email no se proporcionó)
+    pub ingestion: Option<TicketIngestionResponse>,
+}
+
+/// Resumen de la respuesta OCR para el cliente
+#[derive(Debug, Clone, Serialize)]
+pub struct OcrResponseSummary {
+    pub ticket_id: String,
+    pub numero_factura: Option<String>,
+    pub fecha: Option<String>,
+    pub total: Option<f64>,
+    pub productos_detectados: usize,
+}
+
+/// Handler que procesa tickets PDF utilizando la lógica Python embebida
+/// y opcionalmente los ingesta en la base de datos.
 pub async fn process_ticket(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(payload): Json<TicketProcessPayload>,
-) -> AppResult<Json<TicketProcessResponse>> {
+) -> AppResult<Json<TicketProcessAndIngestResponse>> {
     payload
         .validate()
         .map_err(|err| AppError::BadRequest(format!("Validación fallida: {}", err)))?;
 
     tracing::info!("📄 Procesando ticket: {}", payload.file_name);
 
-    let request = payload.into();
-    let result = process_ticket_ocr(request).await.map_err(map_ocr_error)?;
+    // Guardar datos necesarios antes de consumir el payload
+    let pdf_b64 = payload.pdf_b64.clone();
+    let file_name = payload.file_name.clone();
+    let usuario_email = payload.usuario_email.clone();
 
-    // Logging detallado del resultado
-    tracing::info!("✅ Ticket procesado exitosamente:");
+    // 1. Procesar con OCR
+    let request = payload.into();
+    let ocr_result = process_ticket_ocr(request)
+        .await
+        .map_err(map_ocr_error)?;
+
+    // Logging del OCR
+    log_ocr_result(&ocr_result);
+
+    // 2. Ingestar en la base de datos si se proporcionó usuario_email
+    let ingestion_result = if let Some(email) = usuario_email {
+        tracing::info!("💾 Ingesta solicitada para usuario: {}", email);
+
+        match ingest_ticket(
+            &state.db_pool,
+            &email,
+            &pdf_b64,
+            &file_name,
+            ocr_result.clone(),
+        )
+        .await
+        {
+            Ok(ingestion) => {
+                tracing::info!(
+                    "✅ Ticket {} ingestado exitosamente",
+                    ingestion.numero_factura
+                );
+                Some(ingestion)
+            }
+            Err(e) => {
+                // Loguear el error pero no fallar la request completa
+                tracing::error!("❌ Error en la ingesta: {:?}", e);
+                return Err(e);
+            }
+        }
+    } else {
+        tracing::info!("ℹ️  No se solicitó ingesta (usuario_email no proporcionado)");
+        None
+    };
+
+    // 3. Construir respuesta
+    let response = TicketProcessAndIngestResponse {
+        ocr: OcrResponseSummary {
+            ticket_id: ocr_result.ticket_id.clone(),
+            numero_factura: ocr_result.numero_factura.clone(),
+            fecha: ocr_result.fecha.clone(),
+            total: ocr_result.total,
+            productos_detectados: ocr_result.productos.len(),
+        },
+        ingestion: ingestion_result,
+    };
+
+    tracing::info!("─────────────────────────────────────────");
+
+    Ok(Json(response))
+}
+
+/// Logging detallado del resultado del OCR
+fn log_ocr_result(result: &crate::services::OcrProcessTicketResponse) {
+    tracing::info!("✅ OCR completado exitosamente:");
     tracing::info!("   📋 ID: {}", result.ticket_id);
 
     if let Some(ref factura) = result.numero_factura {
@@ -77,10 +158,6 @@ pub async fn process_ticket(
             );
         }
     }
-
-    tracing::info!("─────────────────────────────────────────");
-
-    Ok(Json(result))
 }
 
 fn map_ocr_error(err: OcrError) -> AppError {

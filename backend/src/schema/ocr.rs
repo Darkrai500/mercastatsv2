@@ -2,7 +2,6 @@ use serde::Deserialize;
 use validator::Validate;
 
 use crate::services::OcrProcessTicketRequest;
-pub use crate::services::OcrProcessTicketResponse as TicketProcessResponse;
 
 /// Payload recibido desde el frontend para procesar un ticket.
 #[derive(Debug, Clone, Deserialize, Validate)]
@@ -13,6 +12,9 @@ pub struct TicketProcessPayload {
     pub file_name: String,
     #[validate(length(min = 1, message = "pdf_b64 es requerido"))]
     pub pdf_b64: String,
+    /// Email del usuario (temporal hasta que se implemente autenticación JWT)
+    #[validate(email(message = "usuario_email debe ser un email válido"))]
+    pub usuario_email: Option<String>,
 }
 
 impl From<TicketProcessPayload> for OcrProcessTicketRequest {

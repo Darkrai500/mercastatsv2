@@ -18,6 +18,16 @@ pub enum AppError {
     BadRequest(String),
     /// Error interno del servidor
     InternalError(String),
+    /// Número de factura faltante en el ticket
+    MissingInvoiceNumber,
+    /// Los totales del ticket no son válidos o no coinciden
+    InvalidTotals(String),
+    /// La compra ya existe en la base de datos (duplicado)
+    DuplicatePurchase(String),
+    /// Error de integridad de base de datos (constraint violation)
+    DatabaseIntegrity(String),
+    /// Datos del ticket inválidos
+    InvalidTicketData(String),
 }
 
 /// Estructura de respuesta de error para JSON
@@ -46,6 +56,23 @@ impl IntoResponse for AppError {
                     "Error interno del servidor".to_string(),
                 )
             }
+            AppError::MissingInvoiceNumber => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "El ticket no contiene número de factura".to_string(),
+            ),
+            AppError::InvalidTotals(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
+            AppError::DuplicatePurchase(invoice) => (
+                StatusCode::CONFLICT,
+                format!("La compra con número de factura {} ya existe", invoice),
+            ),
+            AppError::DatabaseIntegrity(msg) => {
+                tracing::error!("Database integrity error: {}", msg);
+                (
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    format!("Error de integridad: {}", msg),
+                )
+            }
+            AppError::InvalidTicketData(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
         };
 
         let body = Json(ErrorResponse {
@@ -61,6 +88,28 @@ impl From<sqlx::Error> for AppError {
     fn from(err: sqlx::Error) -> Self {
         match err {
             sqlx::Error::RowNotFound => AppError::NotFound("Usuario no encontrado".to_string()),
+            sqlx::Error::Database(db_err) => {
+                // Manejar constraint violations específicas
+                if let Some(constraint) = db_err.constraint() {
+                    if constraint.contains("unique") || constraint.contains("pk") {
+                        return AppError::DatabaseIntegrity(format!(
+                            "Violación de unicidad: {}",
+                            constraint
+                        ));
+                    } else if constraint.contains("fk") {
+                        return AppError::DatabaseIntegrity(format!(
+                            "Violación de clave foránea: {}",
+                            constraint
+                        ));
+                    } else if constraint.contains("check") {
+                        return AppError::DatabaseIntegrity(format!(
+                            "Violación de constraint: {}",
+                            constraint
+                        ));
+                    }
+                }
+                AppError::DatabaseError(db_err.to_string())
+            }
             _ => AppError::DatabaseError(err.to_string()),
         }
     }

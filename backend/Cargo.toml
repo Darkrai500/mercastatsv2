@@ -27,6 +27,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Fechas
 chrono = { version = "0.4", features = ["serde"] }
 
+# Números decimales con precisión
+rust_decimal = { version = "1.33", features = ["serde"] }
+
+# Base64 encoding/decoding
+base64 = "0.21"
+
 # Autenticación
 bcrypt = "0.15"
 jsonwebtoken = "9.2"
