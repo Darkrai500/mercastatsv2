@@ -1,13 +1,31 @@
+use crate::api::get_auth_token;
 use crate::components::sidebar::DashboardView;
 use crate::components::Sidebar;
 use crate::pages::{ExamplePage, TicketHistory, Upload};
 use leptos::*;
+use leptos_router::use_navigate;
 
 /// Página principal del Dashboard que contiene el menú lateral y las subpáginas
 #[component]
 pub fn Dashboard() -> impl IntoView {
     // Estado para la vista actual del dashboard
     let (current_view, set_current_view) = create_signal(DashboardView::Upload);
+    let navigate = use_navigate();
+
+    {
+        let navigate = navigate.clone();
+        create_effect(move |_| {
+            if get_auth_token().is_none() {
+                if let Some(window) = web_sys::window() {
+                    if let Ok(Some(storage)) = window.local_storage() {
+                        let _ = storage.remove_item("auth_token");
+                        let _ = storage.remove_item("user_email");
+                    }
+                }
+                navigate("/", Default::default());
+            }
+        });
+    }
 
     view! {
         <div class="flex min-h-screen bg-gray-50">

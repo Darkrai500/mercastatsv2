@@ -1,2 +1,3 @@
-// Middleware será implementado en futuras fases
-// Por ahora se deja como placeholder
+pub mod auth;
+
+pub use auth::AuthenticatedUser;

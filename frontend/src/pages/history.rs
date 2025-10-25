@@ -1,6 +1,7 @@
 use crate::api::tickets::{get_user_ticket_history, TicketHistoryResponse};
-use crate::components::{Card};
+use crate::components::Card;
 use leptos::*;
+use leptos_router::use_navigate;
 
 #[component]
 pub fn TicketHistory() -> impl IntoView {
@@ -8,35 +9,32 @@ pub fn TicketHistory() -> impl IntoView {
     let (loading, set_loading) = create_signal(true);
     let (error_message, set_error_message) = create_signal(None::<String>);
 
-    // Cargar histórico al montar el componente
-    create_effect(move |_| {
-        // Obtener email del usuario
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
-                if let Ok(Some(email)) = storage.get_item("user_email") {
-                    set_loading.set(true);
-                    set_error_message.set(None);
+    // Cargar historico al montar el componente
+    let navigate = use_navigate();
 
-                    spawn_local(async move {
-                        match get_user_ticket_history(&email).await {
-                            Ok(data) => {
-                                set_history_data.set(Some(data));
-                                set_loading.set(false);
-                            }
-                            Err(err) => {
-                                set_error_message.set(Some(err));
-                                set_loading.set(false);
-                            }
-                        }
-                    });
-                } else {
-                    set_error_message.set(Some(
-                        "No se encontró el email del usuario".to_string(),
-                    ));
-                    set_loading.set(false);
+    create_effect(move |_| {
+        set_loading.set(true);
+        set_error_message.set(None);
+
+        let navigate = navigate.clone();
+        let set_history_data = set_history_data;
+        let set_loading = set_loading;
+        let set_error_message = set_error_message;
+
+        spawn_local(async move {
+            let result = get_user_ticket_history().await;
+            set_loading.set(false);
+
+            match result {
+                Ok(data) => set_history_data.set(Some(data)),
+                Err(err) => {
+                    if err.contains("sesion") {
+                        navigate("/", Default::default());
+                    }
+                    set_error_message.set(Some(err));
                 }
             }
-        }
+        });
     });
 
     view! {
@@ -98,7 +96,7 @@ pub fn TicketHistory() -> impl IntoView {
                                 </svg>
                             </div>
                             <div class="text-3xl font-bold text-gray-900 mb-1">
-                                {data.stats.total_gastado.clone().unwrap_or_else(|| "0.00".to_string())}"€"
+                                {format!("{:.2}€", data.stats.gasto_total.unwrap_or(0.0))}
                             </div>
                             <div class="text-sm text-gray-600">"Gasto total"</div>
                         </div>
@@ -112,9 +110,18 @@ pub fn TicketHistory() -> impl IntoView {
                                 </svg>
                             </div>
                             <div class="text-3xl font-bold text-gray-900 mb-1">
-                                {data.stats.productos_unicos.unwrap_or(0)}
+                                {format!("{:.2}€", data.stats.gasto_promedio.unwrap_or(0.0))}
                             </div>
-                            <div class="text-sm text-gray-600">"Productos únicos"</div>
+                            <div class="text-sm text-gray-600">"Gasto promedio"</div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                {format!(
+                                    "Ultimo ticket: {}",
+                                    data.stats
+                                        .ultimo_ticket
+                                        .clone()
+                                        .unwrap_or_else(|| "Sin registros".to_string())
+                                )}
+                            </div>
                         </div>
                     </Card>
                 </div>

@@ -61,10 +61,7 @@ pub struct UserStats {
     pub productos_unicos: Option<i64>,
 }
 
-pub async fn get_user_stats(
-    pool: &PgPool,
-    usuario_email: &str,
-) -> Result<UserStats, sqlx::Error> {
+pub async fn get_user_stats(pool: &PgPool, usuario_email: &str) -> Result<UserStats, sqlx::Error> {
     let stats = sqlx::query_as!(
         UserStats,
         r#"

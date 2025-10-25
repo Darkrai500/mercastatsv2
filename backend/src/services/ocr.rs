@@ -149,12 +149,8 @@ fn load_processor_module(py: Python<'_>) -> Result<&PyModule, OcrError> {
     }
 
     // El paquete Python es `src`, importamos `src.processor` para mantener los imports relativos
-    py.import("src.processor").map_err(|err| {
-        OcrError::Python(format!(
-            "No se pudo importar processor: {}",
-            err
-        ))
-    })
+    py.import("src.processor")
+        .map_err(|err| OcrError::Python(format!("No se pudo importar processor: {}", err)))
 }
 
 #[allow(deprecated)]

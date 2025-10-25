@@ -1,4 +1,4 @@
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -47,11 +47,17 @@ pub fn generate_jwt(email: &str, jwt_secret: &str) -> AppResult<String> {
 
 /// Verifica y decodifica un JWT
 pub fn verify_jwt(token: &str, jwt_secret: &str) -> AppResult<JwtClaims> {
-    let token_data = decode::<JwtClaims>(
+    match decode::<JwtClaims>(
         token,
         &DecodingKey::from_secret(jwt_secret.as_bytes()),
         &Validation::default(),
-    )?;
-
-    Ok(token_data.claims)
+    ) {
+        Ok(token_data) => Ok(token_data.claims),
+        Err(err) => {
+            tracing::warn!("Fallo al verificar JWT: {}", err);
+            Err(AppError::Unauthorized(
+                "Token inválido o expirado".to_string(),
+            ))
+        }
+    }
 }

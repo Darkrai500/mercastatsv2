@@ -54,7 +54,10 @@ pub async fn ingest_ticket(
 
     // 2. Verificar si ya existe (idempotencia)
     if let Some(_existing) = db::get_purchase(pool, &numero_factura).await? {
-        tracing::warn!("⚠️  La compra {} ya existe en la base de datos", numero_factura);
+        tracing::warn!(
+            "⚠️  La compra {} ya existe en la base de datos",
+            numero_factura
+        );
         return Err(AppError::DuplicatePurchase(numero_factura));
     }
 
@@ -113,7 +116,7 @@ pub async fn ingest_ticket(
     for producto in &productos {
         let product_upsert = ProductUpsert {
             nombre: producto.producto_nombre.clone(),
-            marca: None, // El OCR actual no extrae marca
+            marca: None,                  // El OCR actual no extrae marca
             unidad: "unidad".to_string(), // TODO: extraer del OCR
             precio_actual: Some(producto.precio_unitario),
         };
@@ -230,9 +233,8 @@ fn parse_total(response: &ProcessTicketResponse) -> AppResult<Decimal> {
     }
 
     // Convertir f64 a Decimal con precisión
-    Decimal::from_str(&format!("{:.2}", total_f64)).map_err(|_| {
-        AppError::InvalidTicketData(format!("Total inválido: {}", total_f64))
-    })
+    Decimal::from_str(&format!("{:.2}", total_f64))
+        .map_err(|_| AppError::InvalidTicketData(format!("Total inválido: {}", total_f64)))
 }
 
 /// Parsea un producto del ticket OCR a PurchaseProductInsert

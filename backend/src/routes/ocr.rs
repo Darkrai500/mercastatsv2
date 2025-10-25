@@ -5,20 +5,21 @@ use validator::Validate;
 use super::auth::AppState;
 use crate::{
     error::{AppError, AppResult},
+    middleware::AuthenticatedUser,
     schema::TicketProcessPayload,
     services::{ingest_ticket, process_ticket_ocr, OcrError, TicketIngestionResponse},
 };
 
-/// Respuesta extendida del procesamiento y la ingesta
+/// Respuesta combinada del procesamiento y la ingesta del ticket.
 #[derive(Debug, Clone, Serialize)]
 pub struct TicketProcessAndIngestResponse {
-    /// Información del OCR
+    /// Datos resumidos del OCR
     pub ocr: OcrResponseSummary,
-    /// Información de la ingesta (None si usuario_email no se proporcionó)
+    /// Resultado de la ingesta en base de datos (si se solicito)
     pub ingestion: Option<TicketIngestionResponse>,
 }
 
-/// Resumen de la respuesta OCR para el cliente
+/// Resumen del OCR devuelto al frontend.
 #[derive(Debug, Clone, Serialize)]
 pub struct OcrResponseSummary {
     pub ticket_id: String,
@@ -28,35 +29,47 @@ pub struct OcrResponseSummary {
     pub productos_detectados: usize,
 }
 
-/// Handler que procesa tickets PDF utilizando la lógica Python embebida
-/// y opcionalmente los ingesta en la base de datos.
+/// Procesa un ticket y, si se solicita, lo ingesta en la base de datos.
 pub async fn process_ticket(
     State(state): State<AppState>,
+    auth_user: AuthenticatedUser,
     Json(payload): Json<TicketProcessPayload>,
 ) -> AppResult<Json<TicketProcessAndIngestResponse>> {
     payload
         .validate()
-        .map_err(|err| AppError::BadRequest(format!("Validación fallida: {}", err)))?;
+        .map_err(|err| AppError::BadRequest(format!("Validacion fallida: {}", err)))?;
 
-    tracing::info!("📄 Procesando ticket: {}", payload.file_name);
+    let AuthenticatedUser {
+        email: authenticated_email,
+    } = auth_user;
 
-    // Guardar datos necesarios antes de consumir el payload
+    if let Some(ref email) = payload.usuario_email {
+        if email != &authenticated_email {
+            return Err(AppError::Unauthorized(
+                "No puedes procesar tickets de otro usuario".to_string(),
+            ));
+        }
+    }
+
+    tracing::info!(
+        "Procesando ticket '{}' para el usuario {}",
+        payload.file_name,
+        authenticated_email
+    );
+
+    // Clonar datos necesarios antes de consumir el payload
     let pdf_b64 = payload.pdf_b64.clone();
     let file_name = payload.file_name.clone();
     let usuario_email = payload.usuario_email.clone();
 
-    // 1. Procesar con OCR
+    // 1. Ejecutar OCR
     let request = payload.into();
-    let ocr_result = process_ticket_ocr(request)
-        .await
-        .map_err(map_ocr_error)?;
-
-    // Logging del OCR
+    let ocr_result = process_ticket_ocr(request).await.map_err(map_ocr_error)?;
     log_ocr_result(&ocr_result);
 
-    // 2. Ingestar en la base de datos si se proporcionó usuario_email
+    // 2. Ingestar ticket si el usuario lo solicito
     let ingestion_result = if let Some(email) = usuario_email {
-        tracing::info!("💾 Ingesta solicitada para usuario: {}", email);
+        tracing::info!("Ingesta solicitada para el usuario {}", email);
 
         match ingest_ticket(
             &state.db_pool,
@@ -69,19 +82,18 @@ pub async fn process_ticket(
         {
             Ok(ingestion) => {
                 tracing::info!(
-                    "✅ Ticket {} ingestado exitosamente",
+                    "Ticket {} ingestado correctamente",
                     ingestion.numero_factura
                 );
                 Some(ingestion)
             }
-            Err(e) => {
-                // Loguear el error pero no fallar la request completa
-                tracing::error!("❌ Error en la ingesta: {:?}", e);
-                return Err(e);
+            Err(err) => {
+                tracing::error!("Fallo al ingerir ticket: {:?}", err);
+                return Err(err);
             }
         }
     } else {
-        tracing::info!("ℹ️  No se solicitó ingesta (usuario_email no proporcionado)");
+        tracing::info!("No se solicito ingesta (usuario_email ausente)");
         None
     };
 
@@ -97,46 +109,31 @@ pub async fn process_ticket(
         ingestion: ingestion_result,
     };
 
-    tracing::info!("─────────────────────────────────────────");
-
     Ok(Json(response))
 }
 
-/// Logging detallado del resultado del OCR
+/// Logging estructurado del resultado del OCR para facilitar depuracion.
 fn log_ocr_result(result: &crate::services::OcrProcessTicketResponse) {
-    tracing::info!("✅ OCR completado exitosamente:");
-    tracing::info!("   📋 ID: {}", result.ticket_id);
+    tracing::info!("OCR completado para ticket {}", result.ticket_id);
 
     if let Some(ref factura) = result.numero_factura {
-        tracing::info!("   🧾 Factura: {}", factura);
+        tracing::info!("  Numero de factura: {}", factura);
     }
 
     if let Some(ref fecha) = result.fecha {
-        tracing::info!("   📅 Fecha: {}", fecha);
+        tracing::info!("  Fecha: {}", fecha);
     }
 
     if let Some(total) = result.total {
-        tracing::info!("   💰 Total: {:.2}€", total);
+        tracing::info!("  Total detectado: {:.2}", total);
     }
 
-    if let Some(ref tienda) = result.tienda {
-        tracing::info!("   🏪 Tienda: {}", tienda);
-        if let Some(ref ubicacion) = result.ubicacion {
-            tracing::info!("      📍 {}", ubicacion);
-        }
-    }
-
-    if let Some(ref metodo) = result.metodo_pago {
-        tracing::info!("   💳 Pago: {}", metodo);
-    }
-
-    tracing::info!("   🛒 Productos encontrados: {}", result.productos.len());
+    tracing::info!("  Productos detectados: {}", result.productos.len());
 
     if !result.productos.is_empty() {
-        tracing::info!("   Lista de productos:");
         for (idx, prod) in result.productos.iter().enumerate() {
             tracing::info!(
-                "      {}. {} - {} {} × {:.2}€ = {:.2}€",
+                "    {}. {} - {} {} x {:.2} = {:.2}",
                 idx + 1,
                 prod.nombre,
                 prod.cantidad,
@@ -148,10 +145,10 @@ fn log_ocr_result(result: &crate::services::OcrProcessTicketResponse) {
     }
 
     if !result.iva_desglose.is_empty() {
-        tracing::info!("   📊 Desglose IVA:");
+        tracing::info!("  IVA desglosado:");
         for iva in &result.iva_desglose {
             tracing::info!(
-                "      {}%: Base {:.2}€ → Cuota {:.2}€",
+                "    {}% -> base {:.2}, cuota {:.2}",
                 iva.porcentaje,
                 iva.base_imponible,
                 iva.cuota
@@ -168,8 +165,8 @@ fn map_ocr_error(err: OcrError) -> AppError {
             AppError::InternalError("Fallo en el motor OCR".to_string())
         }
         OcrError::Deserialize(error) => {
-            tracing::error!("Error de deserialización OCR: {}", error);
-            AppError::InternalError("Respuesta OCR inválida".to_string())
+            tracing::error!("Error de deserializacion OCR: {}", error);
+            AppError::InternalError("Respuesta OCR invalida".to_string())
         }
         OcrError::Join(error) => {
             tracing::error!("Error al ejecutar OCR en hilo bloqueante: {}", error);

@@ -31,7 +31,10 @@ pub async fn get_product(pool: &PgPool, nombre: &str) -> Result<Option<Product>,
 ///   - Actualiza precio_actual solo si el nuevo precio es más reciente
 ///
 /// Puede usarse tanto con un pool como con una transacción
-pub async fn upsert_product<'c, E>(executor: E, product: &ProductUpsert) -> Result<Product, sqlx::Error>
+pub async fn upsert_product<'c, E>(
+    executor: E,
+    product: &ProductUpsert,
+) -> Result<Product, sqlx::Error>
 where
     E: sqlx::Executor<'c, Database = Postgres>,
 {

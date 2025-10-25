@@ -74,7 +74,7 @@ pub struct ProcessTicketResponse {
     pub ingestion: Option<TicketIngestionResponse>,
 }
 
-// Legacy response para compatibilidad con código existente
+// Legacy response para compatibilidad con codigo existente
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LegacyProcessTicketResponse {
     pub ticket_id: String,
@@ -97,8 +97,8 @@ pub struct LegacyProcessTicketResponse {
 pub async fn upload_ticket(file: File) -> Result<UploadResponse, String> {
     let url = format!("{}/tickets/upload", API_BASE_URL);
 
-    // Obtener token de autenticación
-    let token = get_auth_token().ok_or_else(|| "No hay sesión activa".to_string())?;
+    // Obtener token de autenticacion
+    let token = get_auth_token().ok_or_else(|| "No hay sesion activa".to_string())?;
 
     // Crear FormData
     let form_data = web_sys::FormData::new().map_err(|_| "Error al crear FormData".to_string())?;
@@ -113,10 +113,10 @@ pub async fn upload_ticket(file: File) -> Result<UploadResponse, String> {
     let response = Request::post(&url)
         .header("Authorization", &format!("Bearer {}", token))
         .body(form_data_value)
-        .map_err(|e| format!("Error al preparar petición: {}", e))?
+        .map_err(|e| format!("Error al preparar peticion: {}", e))?
         .send()
         .await
-        .map_err(|e| format!("Error de conexión: {}", e))?;
+        .map_err(|e| format!("Error de conexion: {}", e))?;
 
     if response.ok() {
         response
@@ -125,12 +125,6 @@ pub async fn upload_ticket(file: File) -> Result<UploadResponse, String> {
             .map_err(|e| format!("Error al procesar respuesta: {}", e))
     } else {
         let status = response.status();
-
-        // Si es 401, sesión expirada
-        if status == 401 {
-            return Err("Sesión expirada. Por favor, inicia sesión nuevamente.".to_string());
-        }
-
         let error = response
             .json::<ApiError>()
             .await
@@ -140,47 +134,16 @@ pub async fn upload_ticket(file: File) -> Result<UploadResponse, String> {
     }
 }
 
-// ===== Estructuras para histórico de tickets =====
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TicketHistoryItem {
-    pub numero_factura: String,
-    pub fecha_hora: String,
-    pub total: String,
-    pub tienda: Option<String>,
-    pub ubicacion: Option<String>,
-    pub num_productos: Option<i64>,
-    pub created_at: String,
-}
-
-impl TicketHistoryItem {
-    // Helper para asegurar que Clone está implementado
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserStats {
-    pub total_tickets: Option<i64>,
-    pub total_gastado: Option<String>,
-    pub productos_unicos: Option<i64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TicketHistoryResponse {
-    pub tickets: Vec<TicketHistoryItem>,
-    pub stats: UserStats,
-}
-
-/// Obtener histórico de tickets del usuario
-pub async fn get_user_ticket_history(usuario_email: &str) -> Result<TicketHistoryResponse, String> {
-    let url = format!(
-        "{}/tickets/history?usuario_email={}",
-        API_BASE_URL, usuario_email
-    );
+/// Obtener el historico de tickets y estadisticas del usuario autenticado
+pub async fn get_user_ticket_history() -> Result<TicketHistoryResponse, String> {
+    let token = get_auth_token().ok_or_else(|| "No hay sesion activa".to_string())?;
+    let url = format!("{}/tickets/history", API_BASE_URL);
 
     let response = Request::get(&url)
+        .header("Authorization", &format!("Bearer {}", token))
         .send()
         .await
-        .map_err(|e| format!("Error de conexión: {}", e))?;
+        .map_err(|e| format!("Error de conexion: {}", e))?;
 
     if response.ok() {
         response
@@ -193,7 +156,7 @@ pub async fn get_user_ticket_history(usuario_email: &str) -> Result<TicketHistor
             .json::<ApiError>()
             .await
             .map(|e| e.error)
-            .unwrap_or_else(|_| format!("Error {}: No se pudo obtener el histórico", status));
+            .unwrap_or_else(|_| format!("Error {}: No se pudo obtener el historico", status));
         Err(error)
     }
 }
@@ -201,8 +164,9 @@ pub async fn get_user_ticket_history(usuario_email: &str) -> Result<TicketHistor
 /// Procesar ticket con OCR (PDF o imagen) e ingestarlo en la base de datos
 pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, String> {
     let url = format!("{}/ocr/process", API_BASE_URL);
+    let token = get_auth_token().ok_or_else(|| "No hay sesion activa".to_string())?;
 
-    // Generar ID único para el ticket
+    // Generar ID unico para el ticket
     let ticket_id = format!("ticket_{}", js_sys::Date::now() as u64);
     let file_name = file.name();
 
@@ -228,12 +192,12 @@ pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, Str
     };
 
     let response = Request::post(&url)
-        .header("Content-Type", "application/json")
+        .header("Authorization", &format!("Bearer {}", token))
         .json(&request_body)
-        .map_err(|e| format!("Error al preparar petición: {}", e))?
+        .map_err(|e| format!("Error al preparar peticion: {}", e))?
         .send()
         .await
-        .map_err(|e| format!("Error de conexión: {}", e))?;
+        .map_err(|e| format!("Error de conexion: {}", e))?;
 
     if response.ok() {
         response
@@ -243,7 +207,7 @@ pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, Str
     } else {
         let status = response.status();
 
-        // Capturar errores específicos (como duplicados)
+        // Capturar errores especificos (como duplicados)
         let error = response
             .json::<ApiError>()
             .await
@@ -253,12 +217,35 @@ pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, Str
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketHistoryItem {
+    pub numero_factura: String,
+    pub fecha_hora: String,
+    pub tienda: Option<String>,
+    pub ubicacion: Option<String>,
+    pub total: String,
+    pub num_productos: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserStats {
+    pub total_tickets: Option<i64>,
+    pub gasto_total: Option<f64>,
+    pub gasto_promedio: Option<f64>,
+    pub ultimo_ticket: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketHistoryResponse {
+    pub tickets: Vec<TicketHistoryItem>,
+    pub stats: UserStats,
+}
+
 /// Convierte un archivo a base64
 async fn file_to_base64(file: &File) -> Result<String, String> {
+    use std::rc::Rc;
     use wasm_bindgen::JsCast;
     use wasm_bindgen_futures::JsFuture;
-    use std::rc::Rc;
-    use std::cell::RefCell;
 
     let file_reader = web_sys::FileReader::new().map_err(|_| "Error al crear FileReader")?;
     let file_reader_rc = Rc::new(file_reader);
@@ -271,9 +258,12 @@ async fn file_to_base64(file: &File) -> Result<String, String> {
             }
         }) as Box<dyn FnMut(_)>);
 
-        let onerror = wasm_bindgen::closure::Closure::wrap(Box::new(move |_event: web_sys::Event| {
-            reject.call1(&JsValue::NULL, &JsValue::from_str("Error al leer archivo")).unwrap();
-        }) as Box<dyn FnMut(_)>);
+        let onerror =
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_event: web_sys::Event| {
+                reject
+                    .call1(&JsValue::NULL, &JsValue::from_str("Error al leer archivo"))
+                    .unwrap();
+            }) as Box<dyn FnMut(_)>);
 
         file_reader_rc.set_onload(Some(onload.as_ref().unchecked_ref()));
         file_reader_rc.set_onerror(Some(onerror.as_ref().unchecked_ref()));
@@ -294,7 +284,7 @@ async fn file_to_base64(file: &File) -> Result<String, String> {
         .as_string()
         .ok_or_else(|| "Error al convertir resultado a string")?;
 
-    // Extraer solo la parte base64 (después de "data:...;base64,")
+    // Extraer solo la parte base64 (despues de \"data:...;base64,\")
     let base64 = data_url
         .split(',')
         .nth(1)
