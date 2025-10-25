@@ -53,8 +53,8 @@ pub fn Login() -> impl IntoView {
                     }
 
                     set_loading.set(false);
-                    // Navegar a la página de upload
-                    navigate_for_spawn("/upload", Default::default());
+                    // Navegar al dashboard
+                    navigate_for_spawn("/dashboard", Default::default());
                 }
                 Err(err) => {
                     set_error.set(Some(err));

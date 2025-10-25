@@ -1,0 +1,31 @@
+use leptos::*;
+use crate::components::Sidebar;
+use crate::components::sidebar::DashboardView;
+use crate::pages::{Upload, ExamplePage};
+
+/// Página principal del Dashboard que contiene el menú lateral y las subpáginas
+#[component]
+pub fn Dashboard() -> impl IntoView {
+    // Estado para la vista actual del dashboard
+    let (current_view, set_current_view) = create_signal(DashboardView::Upload);
+
+    view! {
+        <div class="flex min-h-screen bg-gray-50">
+            // Sidebar
+            <Sidebar
+                current_view=current_view
+                on_view_change=move |view| set_current_view.set(view)
+            />
+
+            // Contenido principal
+            <main class="flex-1 overflow-y-auto">
+                <div class="max-w-7xl mx-auto p-8">
+                    {move || match current_view.get() {
+                        DashboardView::Upload => view! { <Upload /> }.into_view(),
+                        DashboardView::Example => view! { <ExamplePage /> }.into_view(),
+                    }}
+                </div>
+            </main>
+        </div>
+    }
+}
