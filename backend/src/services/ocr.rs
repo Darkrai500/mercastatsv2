@@ -129,8 +129,7 @@ fn load_processor_module(py: Python<'_>) -> Result<&PyModule, OcrError> {
 
     let module_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
-        .join("ocr-service")
-        .join("src");
+        .join("ocr-service");
     let module_path_str = module_path
         .to_str()
         .ok_or_else(|| OcrError::Python("Ruta de módulo inválida".to_string()))?;
@@ -149,8 +148,8 @@ fn load_processor_module(py: Python<'_>) -> Result<&PyModule, OcrError> {
         })?;
     }
 
-    // El directorio se llama 'src', no 'ocr_service', así que importamos directamente 'processor'
-    py.import("processor").map_err(|err| {
+    // El paquete Python es `src`, importamos `src.processor` para mantener los imports relativos
+    py.import("src.processor").map_err(|err| {
         OcrError::Python(format!(
             "No se pudo importar processor: {}",
             err
@@ -161,7 +160,7 @@ fn load_processor_module(py: Python<'_>) -> Result<&PyModule, OcrError> {
 #[allow(deprecated)]
 fn handle_python_error(py: Python<'_>, err: PyErr) -> Result<String, OcrError> {
     let parsing_error = py
-        .import("processor")
+        .import("src.processor")
         .ok()
         .and_then(|module| module.getattr("PDFParsingError").ok());
 
