@@ -25,7 +25,6 @@ pub struct ProcessTicketRequest {
     pub ticket_id: String,
     pub file_name: String,
     pub pdf_b64: String,
-    pub usuario_email: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,32 +50,7 @@ pub struct IvaBreakdown {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OcrResponseSummary {
-    pub ticket_id: String,
-    pub numero_factura: Option<String>,
-    pub fecha: Option<String>,
-    pub total: Option<f64>,
-    pub productos_detectados: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TicketIngestionResponse {
-    pub ingested: bool,
-    pub numero_factura: String,
-    pub total: String,
-    pub productos_insertados: usize,
-    pub fecha_hora: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessTicketResponse {
-    pub ocr: OcrResponseSummary,
-    pub ingestion: Option<TicketIngestionResponse>,
-}
-
-// Legacy response para compatibilidad con código existente
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LegacyProcessTicketResponse {
     pub ticket_id: String,
     pub raw_text: String,
     pub numero_factura: Option<String>,
@@ -170,12 +144,7 @@ pub struct TicketHistoryResponse {
     pub stats: UserStats,
 }
 
-/// Obtener histórico de tickets del usuario
-pub async fn get_user_ticket_history(usuario_email: &str) -> Result<TicketHistoryResponse, String> {
-    let url = format!(
-        "{}/tickets/history?usuario_email={}",
-        API_BASE_URL, usuario_email
-    );
+    let token = get_auth_token().ok_or_else(|| "No hay sesión activa".to_string())?;
 
     let response = Request::get(&url)
         .send()
@@ -253,6 +222,47 @@ pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, Str
     }
 }
 
+/// Procesar ticket con OCR (PDF o imagen)
+pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, String> {
+    let url = format!("{}/ocr/process", API_BASE_URL);
+
+    // Generar ID único para el ticket
+    let ticket_id = format!("ticket_{}", js_sys::Date::now() as u64);
+    let file_name = file.name();
+
+    // Convertir archivo a base64
+    let pdf_b64 = file_to_base64(&file).await?;
+
+    let request_body = ProcessTicketRequest {
+        ticket_id,
+        file_name,
+        pdf_b64,
+    };
+
+    let response = Request::post(&url)
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .map_err(|e| format!("Error al preparar petición: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Error de conexión: {}", e))?;
+
+    if response.ok() {
+        response
+            .json::<ProcessTicketResponse>()
+            .await
+            .map_err(|e| format!("Error al procesar respuesta: {}", e))
+    } else {
+        let status = response.status();
+        let error = response
+            .json::<ApiError>()
+            .await
+            .map(|e| e.error)
+            .unwrap_or_else(|_| format!("Error {}: No se pudo procesar el ticket", status));
+        Err(error)
+    }
+}
+
 /// Convierte un archivo a base64
 async fn file_to_base64(file: &File) -> Result<String, String> {
     use wasm_bindgen::JsCast;
@@ -262,6 +272,9 @@ async fn file_to_base64(file: &File) -> Result<String, String> {
 
     let file_reader = web_sys::FileReader::new().map_err(|_| "Error al crear FileReader")?;
     let file_reader_rc = Rc::new(file_reader);
+
+    let result_holder: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+    let result_holder_clone = result_holder.clone();
 
     let promise = js_sys::Promise::new(&mut |resolve, reject| {
         let file_reader_clone = file_reader_rc.clone();

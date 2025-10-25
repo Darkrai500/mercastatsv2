@@ -65,24 +65,14 @@ pub fn Upload() -> impl IntoView {
             spawn_local(async move {
                 match process_ticket_ocr(file).await {
                     Ok(response) => {
-                        let invoice = response.ocr.numero_factura.clone().unwrap_or_default();
-                        let total = response.ocr.total.unwrap_or(0.0);
-                        let products_count = response.ocr.productos_detectados;
+                        let invoice = response.numero_factura.clone().unwrap_or_default();
+                        let total = response.total.unwrap_or(0.0);
+                        let products_count = response.productos.len();
 
-                        // Verificar si la ingesta fue exitosa
-                        let message = if let Some(ingestion) = &response.ingestion {
-                            format!(
-                                "¡Ticket guardado con éxito! Factura: {} | Total: {:.2}€ | {} productos guardados",
-                                ingestion.numero_factura, total, ingestion.productos_insertados
-                            )
-                        } else {
-                            format!(
-                                "Ticket procesado (OCR): {} | Total: {:.2}€ | {} productos detectados (no guardado)",
-                                invoice, total, products_count
-                            )
-                        };
-
-                        set_success_message.set(Some(message));
+                        set_success_message.set(Some(format!(
+                            "¡Ticket procesado con éxito! Factura: {} | Total: {:.2}€ | {} productos",
+                            invoice, total, products_count
+                        )));
                         set_ocr_result.set(Some(response));
                         set_processing.set(false);
                         set_selected_file.set(None);
@@ -97,15 +87,7 @@ pub fn Upload() -> impl IntoView {
                         }
                     }
                     Err(err) => {
-                        // Detectar errores específicos de duplicado
-                        if err.contains("ya existe") || err.contains("Conflict") {
-                            set_error_message.set(Some(format!(
-                                "⚠️ Este ticket ya ha sido subido anteriormente. {}",
-                                err
-                            )));
-                        } else {
-                            set_error_message.set(Some(err));
-                        }
+                        set_error_message.set(Some(err));
                         set_processing.set(false);
                     }
                 }
@@ -354,22 +336,6 @@ pub fn Upload() -> impl IntoView {
                                 </svg>
                                 "Resultado del procesamiento"
                             </h2>
-                            {if result.ingestion.is_some() {
-                                view! {
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                        </svg>
-                                        "Guardado en BD"
-                                    </span>
-                                }.into_view()
-                            } else {
-                                view! {
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-                                        "Solo OCR"
-                                    </span>
-                                }.into_view()
-                            }}
                         </div>
 
                         // Información principal
@@ -377,46 +343,78 @@ pub fn Upload() -> impl IntoView {
                             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
                                 <div class="text-sm text-gray-600 mb-1">"Factura"</div>
                                 <div class="text-xl font-bold text-gray-900">
-                                    {result.ocr.numero_factura.clone().unwrap_or_else(|| "N/A".to_string())}
+                                    {result.numero_factura.clone().unwrap_or_else(|| "N/A".to_string())}
                                 </div>
                             </div>
                             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
                                 <div class="text-sm text-gray-600 mb-1">"Fecha"</div>
                                 <div class="text-xl font-bold text-gray-900">
-                                    {result.ocr.fecha.clone().unwrap_or_else(|| "N/A".to_string())}
+                                    {result.fecha.clone().unwrap_or_else(|| "N/A".to_string())}
                                 </div>
                             </div>
                             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
                                 <div class="text-sm text-gray-600 mb-1">"Total"</div>
                                 <div class="text-xl font-bold text-primary-600">
-                                    {format!("{:.2}€", result.ocr.total.unwrap_or(0.0))}
+                                    {format!("{:.2}€", result.total.unwrap_or(0.0))}
                                 </div>
                             </div>
                         </div>
 
-                        // Estado de la ingesta
-                        {if let Some(ingestion) = &result.ingestion {
+                        // Información adicional
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                <div class="text-sm text-gray-600 mb-1">"Tienda"</div>
+                                <div class="text-base font-medium text-gray-900">
+                                    {result.tienda.clone().unwrap_or_else(|| "N/A".to_string())}
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    {result.ubicacion.clone().unwrap_or_else(|| "".to_string())}
+                                </div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                <div class="text-sm text-gray-600 mb-1">"Método de pago"</div>
+                                <div class="text-base font-medium text-gray-900">
+                                    {result.metodo_pago.clone().unwrap_or_else(|| "N/A".to_string())}
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    {result.numero_operacion.as_ref().map(|op| format!("Op: {}", op)).unwrap_or_default()}
+                                </div>
+                            </div>
+                        </div>
+
+                        // Lista de productos
+                        {if !result.productos.is_empty() {
                             view! {
-                                <div class="bg-white p-4 rounded-lg shadow-sm border border-green-200">
-                                    <div class="flex items-start">
-                                        <svg class="w-6 h-6 text-green-600 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                    <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                                        <svg class="w-5 h-5 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                                         </svg>
-                                        <div>
-                                            <h3 class="text-base font-semibold text-gray-900 mb-1">"Ticket guardado correctamente"</h3>
-                                            <p class="text-sm text-gray-600">
-                                                {format!(
-                                                    "{} productos guardados en la base de datos. Fecha/Hora: {}",
-                                                    ingestion.productos_insertados,
-                                                    ingestion.fecha_hora
-                                                )}
-                                            </p>
-                                        </div>
+                                        {format!("Productos ({})", result.productos.len())}
+                                    </h3>
+                                    <div class="space-y-2 max-h-96 overflow-y-auto">
+                                        {result.productos.iter().enumerate().map(|(idx, prod)| view! {
+                                            <div class="flex justify-between items-center py-2 px-3 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
+                                                <div class="flex-1">
+                                                    <div class="text-sm font-medium text-gray-900">{format!("{}. {}", idx + 1, prod.nombre.clone())}</div>
+                                                    <div class="text-xs text-gray-600">
+                                                        {format!("{} {} × {:.2}€", prod.cantidad, prod.unidad, prod.precio_unitario)}
+                                                    </div>
+                                                </div>
+                                                <div class="text-sm font-bold text-gray-900 ml-4">
+                                                    {format!("{:.2}€", prod.precio_total)}
+                                                </div>
+                                            </div>
+                                        }).collect_view()}
                                     </div>
                                 </div>
                             }.into_view()
                         } else {
-                            view! { <div></div> }.into_view()
+                            view! {
+                                <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                                    <p class="text-sm text-yellow-800">"No se encontraron productos en el ticket."</p>
+                                </div>
+                            }.into_view()
                         }}
                     </div>
                 </Card>

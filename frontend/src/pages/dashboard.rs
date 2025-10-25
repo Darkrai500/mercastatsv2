@@ -1,6 +1,6 @@
 use crate::components::sidebar::DashboardView;
 use crate::components::Sidebar;
-use crate::pages::{ExamplePage, TicketHistory, Upload};
+use crate::pages::{ExamplePage, Upload};
 use leptos::*;
 
 /// Página principal del Dashboard que contiene el menú lateral y las subpáginas
