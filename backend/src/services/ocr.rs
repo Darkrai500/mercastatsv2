@@ -149,9 +149,10 @@ fn load_processor_module(py: Python<'_>) -> Result<&PyModule, OcrError> {
         })?;
     }
 
-    py.import("ocr_service.processor").map_err(|err| {
+    // El directorio se llama 'src', no 'ocr_service', así que importamos directamente 'processor'
+    py.import("processor").map_err(|err| {
         OcrError::Python(format!(
-            "No se pudo importar ocr_service.processor: {}",
+            "No se pudo importar processor: {}",
             err
         ))
     })
@@ -160,7 +161,7 @@ fn load_processor_module(py: Python<'_>) -> Result<&PyModule, OcrError> {
 #[allow(deprecated)]
 fn handle_python_error(py: Python<'_>, err: PyErr) -> Result<String, OcrError> {
     let parsing_error = py
-        .import("ocr_service")
+        .import("processor")
         .ok()
         .and_then(|module| module.getattr("PDFParsingError").ok());
 
