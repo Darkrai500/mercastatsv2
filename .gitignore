@@ -2,3 +2,4 @@
 /.env
 /frontend/dist
 nul
+/docs/Tickets/*

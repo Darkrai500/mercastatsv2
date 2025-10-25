@@ -38,3 +38,7 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+#OTHERS
+docs/Tickets
+
