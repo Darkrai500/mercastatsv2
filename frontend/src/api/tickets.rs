@@ -25,6 +25,7 @@ pub struct ProcessTicketRequest {
     pub ticket_id: String,
     pub file_name: String,
     pub pdf_b64: String,
+    pub usuario_email: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,7 +51,32 @@ pub struct IvaBreakdown {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcrResponseSummary {
+    pub ticket_id: String,
+    pub numero_factura: Option<String>,
+    pub fecha: Option<String>,
+    pub total: Option<f64>,
+    pub productos_detectados: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketIngestionResponse {
+    pub ingested: bool,
+    pub numero_factura: String,
+    pub total: String,
+    pub productos_insertados: usize,
+    pub fecha_hora: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessTicketResponse {
+    pub ocr: OcrResponseSummary,
+    pub ingestion: Option<TicketIngestionResponse>,
+}
+
+// Legacy response para compatibilidad con código existente
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegacyProcessTicketResponse {
     pub ticket_id: String,
     pub raw_text: String,
     pub numero_factura: Option<String>,
@@ -114,40 +140,61 @@ pub async fn upload_ticket(file: File) -> Result<UploadResponse, String> {
     }
 }
 
-/// Obtener lista de tickets del usuario
-pub async fn get_user_tickets() -> Result<Vec<Ticket>, String> {
-    let url = format!("{}/tickets", API_BASE_URL);
+// ===== Estructuras para histórico de tickets =====
 
-    let token = get_auth_token().ok_or_else(|| "No hay sesión activa".to_string())?;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketHistoryItem {
+    pub numero_factura: String,
+    pub fecha_hora: String,
+    pub total: String,
+    pub tienda: Option<String>,
+    pub ubicacion: Option<String>,
+    pub num_productos: Option<i64>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserStats {
+    pub total_tickets: Option<i64>,
+    pub total_gastado: Option<String>,
+    pub productos_unicos: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketHistoryResponse {
+    pub tickets: Vec<TicketHistoryItem>,
+    pub stats: UserStats,
+}
+
+/// Obtener histórico de tickets del usuario
+pub async fn get_user_ticket_history(usuario_email: &str) -> Result<TicketHistoryResponse, String> {
+    let url = format!(
+        "{}/tickets/history?usuario_email={}",
+        API_BASE_URL, usuario_email
+    );
 
     let response = Request::get(&url)
-        .header("Authorization", &format!("Bearer {}", token))
         .send()
         .await
         .map_err(|e| format!("Error de conexión: {}", e))?;
 
     if response.ok() {
         response
-            .json::<Vec<Ticket>>()
+            .json::<TicketHistoryResponse>()
             .await
             .map_err(|e| format!("Error al procesar respuesta: {}", e))
     } else {
         let status = response.status();
-
-        if status == 401 {
-            return Err("Sesión expirada. Por favor, inicia sesión nuevamente.".to_string());
-        }
-
         let error = response
             .json::<ApiError>()
             .await
             .map(|e| e.error)
-            .unwrap_or_else(|_| format!("Error {}: No se pudo obtener tickets", status));
+            .unwrap_or_else(|_| format!("Error {}: No se pudo obtener el histórico", status));
         Err(error)
     }
 }
 
-/// Procesar ticket con OCR (PDF o imagen)
+/// Procesar ticket con OCR (PDF o imagen) e ingestarlo en la base de datos
 pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, String> {
     let url = format!("{}/ocr/process", API_BASE_URL);
 
@@ -158,10 +205,22 @@ pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, Str
     // Convertir archivo a base64
     let pdf_b64 = file_to_base64(&file).await?;
 
+    // Obtener email del usuario de localStorage
+    let usuario_email = if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            storage.get_item("user_email").ok().flatten()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let request_body = ProcessTicketRequest {
         ticket_id,
         file_name,
         pdf_b64,
+        usuario_email,
     };
 
     let response = Request::post(&url)
@@ -179,6 +238,8 @@ pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, Str
             .map_err(|e| format!("Error al procesar respuesta: {}", e))
     } else {
         let status = response.status();
+
+        // Capturar errores específicos (como duplicados)
         let error = response
             .json::<ApiError>()
             .await

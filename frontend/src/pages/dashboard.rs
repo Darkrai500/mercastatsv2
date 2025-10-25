@@ -1,6 +1,6 @@
 use crate::components::sidebar::DashboardView;
 use crate::components::Sidebar;
-use crate::pages::{ExamplePage, Upload};
+use crate::pages::{ExamplePage, TicketHistory, Upload};
 use leptos::*;
 
 /// Página principal del Dashboard que contiene el menú lateral y las subpáginas
@@ -29,6 +29,7 @@ pub fn Dashboard() -> impl IntoView {
                             >
                                 {match current {
                                     DashboardView::Upload => view! { <Upload /> }.into_view(),
+                                    DashboardView::History => view! { <TicketHistory /> }.into_view(),
                                     DashboardView::Example => view! { <ExamplePage /> }.into_view(),
                                 }}
                             </div>

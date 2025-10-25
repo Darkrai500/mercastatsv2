@@ -60,6 +60,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/auth", routes::auth_router(state.clone()))
         // OCR embebido
         .nest("/api/ocr", routes::ocr_router(state.clone()))
+        // Rutas de tickets
+        .nest("/api/tickets", routes::tickets_router(state.clone()))
         // CORS middleware
         .layer(CorsLayer::permissive());
 
