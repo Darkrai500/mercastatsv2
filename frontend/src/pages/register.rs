@@ -1,7 +1,7 @@
+use crate::api::auth::{register_user, RegisterRequest};
+use crate::components::{Button, Card};
 use leptos::*;
 use leptos_router::*;
-use crate::components::{Button, Card};
-use crate::api::auth::{register_user, RegisterRequest};
 
 #[component]
 pub fn Register() -> impl IntoView {
@@ -40,7 +40,9 @@ pub fn Register() -> impl IntoView {
         }
 
         if password_val.len() < 8 {
-            set_error.set(Some("La contraseña debe tener al menos 8 caracteres".to_string()));
+            set_error.set(Some(
+                "La contraseña debe tener al menos 8 caracteres".to_string(),
+            ));
             set_loading.set(false);
             return;
         }

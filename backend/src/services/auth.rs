@@ -1,7 +1,7 @@
+use crate::error::AppResult;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use crate::error::AppResult;
 
 /// Claims del JWT (información codificada en el token)
 #[derive(Debug, Serialize, Deserialize)]

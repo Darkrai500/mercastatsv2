@@ -8,15 +8,13 @@ Endpoints:
 
 import sys
 from contextlib import asynccontextmanager
-from dataclasses import asdict
-
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from .models import HealthResponse, ProcessTicketRequest, ProcessTicketResponse
-from .services import PDFParsingError, parse_ticket
+from .models import HealthResponse, ProcessTicketRequest
+from .processor import PDFParsingError, process_ticket_response
 
 
 # ============================================================================
@@ -93,31 +91,24 @@ async def process_ticket(request: ProcessTicketRequest):
     logger.info("Procesando ticket %s | archivo=%s", request.ticket_id, request.file_name)
 
     try:
-        parsed_ticket = parse_ticket(request.pdf_b64)
-
-        response = ProcessTicketResponse(
+        response = process_ticket_response(
             ticket_id=request.ticket_id,
-            raw_text=parsed_ticket.raw_text,
-            numero_factura=parsed_ticket.numero_factura,
-            fecha=parsed_ticket.fecha,
-            fecha_hora=parsed_ticket.fecha_hora,
-            total=parsed_ticket.total,
-            tienda=parsed_ticket.tienda,
-            ubicacion=parsed_ticket.ubicacion,
-            metodo_pago=parsed_ticket.metodo_pago,
-            numero_operacion=parsed_ticket.numero_operacion,
-            productos=[asdict(prod) for prod in parsed_ticket.productos],
-            iva_desglose=[asdict(item) for item in parsed_ticket.iva_desglose],
+            file_name=request.file_name,
+            pdf_b64=request.pdf_b64,
+        )
+
+        fecha_repr = (
+            response.fecha_hora.isoformat(timespec="minutes")
+            if response.fecha_hora
+            else response.fecha
         )
 
         logger.success(
             "Ticket procesado | factura=%s | fecha=%s | total=%s | productos=%s",
-            parsed_ticket.numero_factura,
-            parsed_ticket.fecha_hora.isoformat(timespec="minutes")
-            if parsed_ticket.fecha_hora
-            else parsed_ticket.fecha,
-            parsed_ticket.total,
-            len(parsed_ticket.productos),
+            response.numero_factura,
+            fecha_repr,
+            response.total,
+            len(response.productos),
         )
 
         return response
@@ -166,4 +157,3 @@ if __name__ == "__main__":
         reload=True,
         log_level="info",
     )
-

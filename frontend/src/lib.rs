@@ -1,12 +1,12 @@
+mod api;
 mod components;
 mod pages;
-mod api;
 
 use leptos::*;
-use leptos_router::*;
 use leptos_meta::*;
+use leptos_router::*;
+use pages::{Dashboard, Login, Register};
 use wasm_bindgen::prelude::*;
-use pages::{Login, Register, Dashboard};
 
 #[wasm_bindgen(start)]
 pub fn main() {

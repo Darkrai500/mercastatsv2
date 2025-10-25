@@ -12,14 +12,13 @@ impl AppConfig {
     pub fn from_env() -> Result<Self, String> {
         dotenvy::dotenv().ok(); // Cargar .env si existe
 
-        let database_url = std::env::var("DATABASE_URL")
-            .map_err(|_| "DATABASE_URL no configurada".to_string())?;
+        let database_url =
+            std::env::var("DATABASE_URL").map_err(|_| "DATABASE_URL no configurada".to_string())?;
 
-        let jwt_secret = std::env::var("JWT_SECRET")
-            .map_err(|_| "JWT_SECRET no configurada".to_string())?;
+        let jwt_secret =
+            std::env::var("JWT_SECRET").map_err(|_| "JWT_SECRET no configurada".to_string())?;
 
-        let host = std::env::var("BACKEND_HOST")
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let host = std::env::var("BACKEND_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
 
         let port = std::env::var("BACKEND_PORT")
             .ok()

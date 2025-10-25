@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
+use super::{get_auth_token, ApiError, API_BASE_URL};
 use gloo_net::http::Request;
-use web_sys::File;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
-use super::{API_BASE_URL, ApiError, get_auth_token};
+use web_sys::File;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadResponse {
@@ -23,12 +23,10 @@ pub async fn upload_ticket(file: File) -> Result<UploadResponse, String> {
     let url = format!("{}/tickets/upload", API_BASE_URL);
 
     // Obtener token de autenticación
-    let token = get_auth_token()
-        .ok_or_else(|| "No hay sesión activa".to_string())?;
+    let token = get_auth_token().ok_or_else(|| "No hay sesión activa".to_string())?;
 
     // Crear FormData
-    let form_data = web_sys::FormData::new()
-        .map_err(|_| "Error al crear FormData".to_string())?;
+    let form_data = web_sys::FormData::new().map_err(|_| "Error al crear FormData".to_string())?;
 
     form_data
         .append_with_blob("file", &file)
@@ -71,8 +69,7 @@ pub async fn upload_ticket(file: File) -> Result<UploadResponse, String> {
 pub async fn get_user_tickets() -> Result<Vec<Ticket>, String> {
     let url = format!("{}/tickets", API_BASE_URL);
 
-    let token = get_auth_token()
-        .ok_or_else(|| "No hay sesión activa".to_string())?;
+    let token = get_auth_token().ok_or_else(|| "No hay sesión activa".to_string())?;
 
     let response = Request::get(&url)
         .header("Authorization", &format!("Bearer {}", token))

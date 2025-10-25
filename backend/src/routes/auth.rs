@@ -1,15 +1,12 @@
-use axum::{
-    extract::State,
-    routing::post,
-    Json, Router,
-};
+use axum::{extract::State, routing::post, Json, Router};
 use sqlx::PgPool;
 
 use crate::{
+    config::AppConfig,
+    db,
     error::AppResult,
     schema::{AuthResponse, LoginRequest, RegisterRequest, UserInfo},
     services::{generate_jwt, hash_password, verify_password},
-    db, config::AppConfig,
 };
 
 /// Estado compartido del servidor

@@ -1,7 +1,7 @@
+use crate::api::auth::{login_user, LoginRequest};
+use crate::components::{Button, Card};
 use leptos::*;
 use leptos_router::*;
-use crate::components::{Button, Card};
-use crate::api::auth::{login_user, LoginRequest};
 
 #[component]
 pub fn Login() -> impl IntoView {
