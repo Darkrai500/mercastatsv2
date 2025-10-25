@@ -17,12 +17,22 @@ pub fn Dashboard() -> impl IntoView {
                 on_view_change=move |view| set_current_view.set(view)
             />
 
-            // Contenido principal
+            // Contenido principal con transiciones suaves
             <main class="flex-1 overflow-y-auto">
                 <div class="max-w-7xl mx-auto p-8">
-                    {move || match current_view.get() {
-                        DashboardView::Upload => view! { <Upload /> }.into_view(),
-                        DashboardView::Example => view! { <ExamplePage /> }.into_view(),
+                    {move || {
+                        let current = current_view.get();
+                        view! {
+                            <div
+                                class="transition-all duration-300 ease-in-out animate-fade-in"
+                                key=format!("{:?}", current)
+                            >
+                                {match current {
+                                    DashboardView::Upload => view! { <Upload /> }.into_view(),
+                                    DashboardView::Example => view! { <ExamplePage /> }.into_view(),
+                                }}
+                            </div>
+                        }
                     }}
                 </div>
             </main>
