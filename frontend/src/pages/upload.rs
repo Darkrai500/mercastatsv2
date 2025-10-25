@@ -1,7 +1,7 @@
+use crate::api::tickets::upload_ticket;
+use crate::components::{Button, ButtonVariant, Card};
 use leptos::*;
 use web_sys::{File, HtmlInputElement};
-use crate::components::{Button, ButtonVariant, Card};
-use crate::api::tickets::upload_ticket;
 
 #[component]
 pub fn Upload() -> impl IntoView {
@@ -38,10 +38,16 @@ pub fn Upload() -> impl IntoView {
                 if file_type.starts_with("image/") {
                     spawn_local(async move {
                         if let Ok(url) = create_object_url(&file) {
+                            if let Some(prev) = preview_url.get_untracked() {
+                                let _ = web_sys::Url::revoke_object_url(&prev);
+                            }
                             set_preview_url.set(Some(url));
                         }
                     });
                 } else {
+                    if let Some(prev) = preview_url.get_untracked() {
+                        let _ = web_sys::Url::revoke_object_url(&prev);
+                    }
                     set_preview_url.set(None);
                 }
             }
@@ -63,6 +69,9 @@ pub fn Upload() -> impl IntoView {
                         )));
                         set_uploading.set(false);
                         set_selected_file.set(None);
+                        if let Some(prev) = preview_url.get_untracked() {
+                            let _ = web_sys::Url::revoke_object_url(&prev);
+                        }
                         set_preview_url.set(None);
 
                         // Reset file input
@@ -79,12 +88,31 @@ pub fn Upload() -> impl IntoView {
         }
     };
 
-
     let trigger_file_input = move |_| {
         if let Some(input) = file_input_ref.get() {
             input.click();
         }
     };
+
+    let handle_cancel = move |_| {
+        set_selected_file.set(None);
+        set_success_message.set(None);
+        set_error_message.set(None);
+        if let Some(prev) = preview_url.get_untracked() {
+            let _ = web_sys::Url::revoke_object_url(&prev);
+        }
+        set_preview_url.set(None);
+
+        if let Some(input) = file_input_ref.get() {
+            input.set_value("");
+        }
+    };
+
+    on_cleanup(move || {
+        if let Some(prev) = preview_url.get_untracked() {
+            let _ = web_sys::Url::revoke_object_url(&prev);
+        }
+    });
 
     view! {
         <div class="space-y-6">
@@ -219,6 +247,7 @@ pub fn Upload() -> impl IntoView {
                                         </Button>
                                         <Button
                                             variant=ButtonVariant::Outline
+                                            on:click=handle_cancel
                                         >
                                             "Cancelar"
                                         </Button>
