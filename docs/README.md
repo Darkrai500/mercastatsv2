@@ -13,31 +13,34 @@
 
 Mercastats es una aplicación web full-stack que te permite:
 
-- 📸 **Subir tickets** de compra (PDF o imágenes)
-- 📊 **Visualizar estadísticas** de tus hábitos de consumo
-- 💰 **Calcular tu inflación personal** basada en tus productos favoritos
-- 📈 **Detectar tendencias** en tus compras
-- 🎯 **Establecer objetivos** de ahorro mensuales
-- 🏆 **Desbloquear logros** mientras haces tus compras más inteligentes
+- 📸 **Subir tickets** de compra (PDF)
+- 📊 **Visualizar estadísticas** básicas de tus hábitos de consumo
+- 📜 **Consultar tu historial** de tickets
+- (_Próximamente_) 💰 Calcular tu inflación personal basada en tus productos favoritos
+- (_Próximamente_) 📈 Detectar tendencias en tus compras
+- (_Próximamente_) 🎯 Establecer objetivos de ahorro mensuales
+- (_Próximamente_) 🏆 Desbloquear logros mientras haces tus compras más inteligentes
 
 ---
 
 ## ✨ Características Principales
 
-### 📊 Estadísticas Básicas (MVP)
-- ✅ Gasto medio y desviación estándar
-- ✅ Productos más comprados (ranking)
-- ✅ Evolución del gasto mensual/semanal
-- ✅ Distribución de gasto por categorías
-- ✅ Histórico completo desde el inicio
+### Implementado ✅
+- ✅ **Autenticación de Usuarios**: Registro e inicio de sesión seguros con JWT.
+- ✅ **Subida de Tickets**: Interfaz para subir archivos PDF de tickets de Mercadona.
+- ✅ **Procesamiento OCR**: Extracción de datos (número de factura, fecha, total, productos) de PDFs usando una integración Python (PyO3).
+- ✅ **Persistencia de Datos**: Guardado de la información de compras y productos en base de datos PostgreSQL.
+- ✅ **Historial de Tickets**: Visualización del listado de tickets subidos con opción de ordenación.
+- ✅ **Estadísticas Básicas**: Resumen de número total de tickets, gasto total y gasto promedio.
+- ✅ **Frontend Reactivo**: Interfaz de usuario moderna construida con Leptos (WASM) y Tailwind CSS.
 
-### 🔍 Análisis Avanzados
+### 🔍 Análisis Avanzados (Futuro)
 - 🔎 Detección de tendencias de consumo
 - 🔎 Cálculo de inflación personalizada
 - 🔎 Comparativa de ticket medio por tienda
 - 🔎 Predicción de gasto del próximo mes
 
-### 🎮 Gamificación
+### 🎮 Gamificación (Futuro)
 - 🏆 Sistema de logros desbloqueables
 - 🎯 Objetivos de ahorro configurables
 - 📅 Calendario de compras
@@ -55,8 +58,8 @@ Mercastats es una aplicación web full-stack que te permite:
 | **Database** | PostgreSQL 16 | Funciones analíticas, JSON, triggers automáticos |
 | **ORM** | SQLx | Validación de queries en compile-time |
 | **Frontend** | Leptos (WASM) | Rendimiento nativo, Rust end-to-end |
-| **OCR** | Python + Tesseract | Ecosistema maduro de visión por computadora |
-| **ML** | Python + scikit-learn | Prototipado rápido de modelos predictivos |
+| **OCR** | Python + pdfplumber | Lógica de extracción de texto y parsing integrada vía PyO3 |
+| **ML** | Python + scikit-learn (_Futuro_) | Prototipado rápido de modelos predictivos |
 
 ---
 
@@ -71,9 +74,13 @@ rustup --version  # 1.75+
 # Instalar PostgreSQL (https://www.postgresql.org/download/)
 psql --version    # 16+
 
+# Instalar Python (necesario para la integración OCR vía PyO3)
+python --version # 3.8+
+
 # Herramientas adicionales
 cargo install sqlx-cli --no-default-features --features postgres
 cargo install cargo-watch
+cargo install trunk # Para el frontend Leptos
 ```
 
 ### Instalación
@@ -86,7 +93,7 @@ cd mercastats
 # 2. Configurar base de datos
 psql -U postgres
 CREATE DATABASE mercastats;
-CREATE USER mercastats_app WITH PASSWORD 'tu_password';
+CREATE USER mercastats_app WITH PASSWORD 'tu_password'; # Cambia 'tu_password'
 GRANT ALL PRIVILEGES ON DATABASE mercastats TO mercastats_app;
 \q
 
@@ -94,134 +101,162 @@ GRANT ALL PRIVILEGES ON DATABASE mercastats TO mercastats_app;
 psql -U postgres -d mercastats -f sql/schema/schema.sql
 
 # 3. Configurar variables de entorno
-# Copiar .env.example a .env y editar
-DATABASE_URL=postgres://mercastats_app:tu_password@localhost:5432/mercastats
-RUST_LOG=debug
-JWT_SECRET=genera_un_secreto_seguro_aqui
+cp .env.example .env
+# Edita .env con tus valores
 
-# 4. Compilar y ejecutar
+# 4. Instalar dependencias Python para OCR
+cd ocr-service
+python -m venv .venv
+source .venv/bin/activate   # (en Linux/Mac) o .venv\Scripts\Activate.ps1 (en Windows)
+pip install -r requirements.txt
+cd ..
+
+# 5. Compilar proyecto Rust
 cargo build
-cd backend
-cargo run
+
+# 6. Preparar SQLx
+cargo sqlx prepare --workspace
+
+# 7. Ejecutar Backend y Frontend
+node dev.js
+# o en terminales separadas:
+# cd backend && cargo watch -x run
+# cd frontend && trunk serve
 ```
 
-La aplicación estará corriendo en `http://localhost:8000`
+La aplicación frontend estará corriendo en `http://127.0.0.1:3000` y el backend en `http://127.0.0.1:8000`.
 
----
+-----
 
 ## 📂 Estructura del Proyecto
 
 ```
 mercastats/
-├── backend/              # Backend en Rust
+├── backend/
 │   ├── src/
-│   │   ├── main.rs      # Punto de entrada
-│   │   ├── models/      # Modelos de dominio
-│   │   ├── routes/      # Endpoints HTTP
-│   │   ├── services/    # Lógica de negocio
-│   │   └── db/          # Acceso a datos
-│   └── tests/           # Tests de integración
+│   │   ├── main.rs
+│   │   ├── config.rs
+│   │   ├── db/
+│   │   ├── error.rs
+│   │   ├── middleware/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── schema/
+│   │   └── services/
+│   └── Cargo.toml
 │
-├── frontend/            # Frontend Leptos (próximamente)
-├── ocr-service/         # Worker Python OCR (futuro)
-├── ml-service/          # Worker Python ML (futuro)
-├── sql/schema/          # Scripts SQL
-└── docs/                # Documentación adicional
+├── frontend/
+│   ├── src/
+│   │   ├── main.rs
+│   │   ├── api/
+│   │   ├── components/
+│   │   └── pages/
+│   ├── index.html
+│   ├── Trunk.toml
+│   └── Cargo.toml
+│
+├── ocr-service/
+│   ├── src/
+│   │   ├── processor.py
+│   │   ├── services/
+│   │   ├── models.py
+│   │   └── constants.py
+│   └── requirements.txt
+│
+├── sql/schema/schema.sql
+├── docs/
+├── .env.example
+├── claude.md
+├── Cargo.toml
+└── README.md
 ```
 
----
+-----
 
 ## 🧪 Testing
 
 ```powershell
 # Ejecutar todos los tests
-cargo test
+cargo test --workspace
 
-# Tests con logs visibles
+# Backend con logs
+cd backend
 cargo test -- --nocapture
 
 # Tests específicos
-cargo test test_create_user
-
-# Tests de integración
-cargo test --test integration
+cargo test db::users -- --nocapture
 ```
 
----
+-----
 
 ## 📚 Documentación
 
 ### Para Desarrolladores
-
-- **[claude.md](claude.md)** - Guía completa para Claude Code y desarrolladores
-- **[MERCASTATS_TECH_STACK.md](docs/MERCASTATS_TECH_STACK.md)** - Especificación técnica detallada
-- **[MERCASTATS_SCHEMA_GUIDE.md](docs/MERCASTATS_SCHEMA_GUIDE.md)** - Guía del schema de base de datos
+- [claude.md](claude.md)  
+- [docs/BACKEND_TICKET_INGESTION_PLAN.md](docs/BACKEND_TICKET_INGESTION_PLAN.md)  
+- [docs/OCR_INTEGRATION_NOTES.md](docs/OCR_INTEGRATION_NOTES.md)  
+- [sql/schema/schema.sql](sql/schema/schema.sql)  
+- [frontend/README.md](frontend/README.md)  
+- [ocr-service/README.md](ocr-service/README.md)  
 
 ### Recursos Externos
+- [Rust Book](https://doc.rust-lang.org/book/)  
+- [Axum Documentation](https://docs.rs/axum/)  
+- [SQLx Guide](https://github.com/launchbadge/sqlx)  
+- [Leptos Book](https://leptos-rs.github.io/leptos/)  
+- [PostgreSQL Docs](https://www.postgresql.org/docs/16/)  
 
-- [Rust Book](https://doc.rust-lang.org/book/)
-- [Axum Documentation](https://docs.rs/axum/)
-- [SQLx Guide](https://github.com/launchbadge/sqlx)
-- [PostgreSQL Docs](https://www.postgresql.org/docs/16/)
-
----
+-----
 
 ## 🛣️ Roadmap
 
-### ✅ Fase 1: MVP Backend (En Progreso)
-- [x] Setup del proyecto
-- [x] Schema de base de datos completo
-- [ ] Sistema de logging
-- [ ] CRUD de usuarios
-- [ ] CRUD de compras
-- [ ] Endpoints de estadísticas básicas
+### Implementado ✅
+- Setup del Proyecto  
+- Base de Datos  
+- Backend Core  
+- Autenticación  
+- OCR y Procesamiento de Tickets  
+- Historial y Estadísticas Básicas  
+- Frontend Core  
+- Páginas Frontend  
+- Integración Frontend-Backend  
 
-### 📋 Fase 2: Autenticación (Próximo)
-- [ ] Sistema JWT
-- [ ] Registro de usuarios
-- [ ] Login seguro
-- [ ] Middleware de autenticación
+### Próximos Pasos 📋
+- [ ] Estadísticas avanzadas en frontend  
+- [ ] Endpoints de estadísticas avanzadas en backend  
+- [ ] OCR mejorado (Tesseract)  
+- [ ] Gamificación (objetivos, logros)  
+- [ ] Refresh tokens  
+- [ ] Tests adicionales  
+- [ ] Dockerización completa  
 
-### 📊 Fase 3: Estadísticas Avanzadas
-- [ ] Análisis de tendencias
-- [ ] Cálculo de inflación
-- [ ] Predicciones de gasto
-- [ ] Comparativas temporales
-
-### 🎨 Fase 4: Frontend
-- [ ] Setup de Leptos
-- [ ] Dashboard principal
-- [ ] Gráficos interactivos
-- [ ] Upload de tickets
-
----
+-----
 
 ## 📄 Licencia
 
 Este proyecto está bajo la licencia MIT. Ver `LICENSE` para más detalles.
 
----
+-----
 
 ## 👨‍💻 Autor
 
 **Juan Carlos**
 
----
+-----
 
 ## 📊 Estado del Proyecto
 
 ```
-Progreso General: ███████░░░░░░░░░░░░░░ 35%
-
-Backend:          ████████░░░░░░░░░░░░░ 40%
-Frontend:         ░░░░░░░░░░░░░░░░░░░░░  0%
-Workers Python:   ░░░░░░░░░░░░░░░░░░░░░  0%
+Progreso General: ████████████████░░░░░░ 65%
+Backend:          ███████████████████░░░ 75%
+Frontend:         ██████████████░░░░░░░ 60%
+Workers Python:   ████████░░░░░░░░░░░░░ 40%
 Documentación:    ████████████████░░░░░ 80%
-Tests:            ██████░░░░░░░░░░░░░░░ 30%
+Tests:            ████████░░░░░░░░░░░░░ 40%
 ```
 
----
+-----
 
 <p align="center">
-  Hecho con ❤️ y 🦀 (Rust)
+Hecho con ❤️ y 🦀 (Rust)
 </p>
