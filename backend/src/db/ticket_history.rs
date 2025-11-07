@@ -58,6 +58,7 @@ pub async fn get_user_ticket_history(
 pub struct UserStats {
     pub total_tickets: Option<i64>,
     pub total_gastado: Option<Decimal>,
+    pub gasto_medio: Option<Decimal>,
     pub productos_unicos: Option<i64>,
 }
 
@@ -66,12 +67,25 @@ pub async fn get_user_stats(pool: &PgPool, usuario_email: &str) -> Result<UserSt
         UserStats,
         r#"
         SELECT
-            COUNT(DISTINCT c.numero_factura) as "total_tickets?",
-            COALESCE(SUM(c.total), 0) as "total_gastado?",
-            COUNT(DISTINCT cp.producto_nombre) as "productos_unicos?"
-        FROM compras c
-        LEFT JOIN compras_productos cp ON c.numero_factura = cp.compra_numero_factura
-        WHERE c.usuario_email = $1
+            stats.total_tickets as "total_tickets?",
+            stats.total_gastado as "total_gastado?",
+            stats.gasto_medio as "gasto_medio?",
+            COALESCE(product_stats.productos_unicos, 0) as "productos_unicos?"
+        FROM (
+            SELECT
+                COUNT(*)::bigint AS total_tickets,
+                COALESCE(SUM(total), 0)::numeric AS total_gastado,
+                COALESCE(AVG(total), 0)::numeric AS gasto_medio
+            FROM compras
+            WHERE usuario_email = $1
+        ) stats
+        LEFT JOIN (
+            SELECT
+                COUNT(DISTINCT cp.producto_nombre)::bigint AS productos_unicos
+            FROM compras_productos cp
+            INNER JOIN compras c ON cp.compra_numero_factura = c.numero_factura
+            WHERE c.usuario_email = $1
+        ) product_stats ON TRUE
         "#,
         usuario_email
     )
@@ -164,6 +178,76 @@ mod tests {
 
         assert_eq!(stats.total_tickets, Some(1));
         assert_eq!(stats.total_gastado, Some(Decimal::new(5000, 2)));
+        assert_eq!(stats.gasto_medio, Some(Decimal::new(5000, 2)));
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_get_user_stats_without_double_counting(pool: PgPool) -> sqlx::Result<()> {
+        sqlx::query!(
+            "INSERT INTO usuarios (email, password_hash, nombre) VALUES ($1, $2, $3)",
+            "multi@example.com",
+            "$2b$12$KpIEW.jQKvqXfN5nDwAXLub8RCRYjqNvCLKXfzHpFGK2FQJGmqQJi",
+            "Multi Stats User"
+        )
+        .execute(&pool)
+        .await?;
+
+        // Primera compra con dos productos
+        sqlx::query!(
+            r#"
+            INSERT INTO compras (numero_factura, usuario_email, fecha_hora, total)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            "0001-001-100000",
+            "multi@example.com",
+            NaiveDate::from_ymd_opt(2025, 2, 10)
+                .unwrap()
+                .and_hms_opt(9, 0, 0)
+                .unwrap(),
+            Decimal::new(3000, 2) // 30.00
+        )
+        .execute(&pool)
+        .await?;
+
+        for (producto, precio) in [("Manzanas", 1500_i64), ("Naranjas", 1500_i64)] {
+            sqlx::query!(
+                r#"
+                INSERT INTO compras_productos (compra_numero_factura, producto_nombre, precio_total)
+                VALUES ($1, $2, $3)
+                "#,
+                "0001-001-100000",
+                producto,
+                Decimal::new(precio, 2)
+            )
+            .execute(&pool)
+            .await?;
+        }
+
+        // Segunda compra sin productos asociados
+        sqlx::query!(
+            r#"
+            INSERT INTO compras (numero_factura, usuario_email, fecha_hora, total)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            "0001-001-100001",
+            "multi@example.com",
+            NaiveDate::from_ymd_opt(2025, 2, 11)
+                .unwrap()
+                .and_hms_opt(9, 0, 0)
+                .unwrap(),
+            Decimal::new(3000, 2) // 30.00
+        )
+        .execute(&pool)
+        .await?;
+
+        let stats = get_user_stats(&pool, "multi@example.com").await?;
+
+        assert_eq!(stats.total_tickets, Some(2));
+        assert_eq!(stats.total_gastado, Some(Decimal::new(6000, 2))); // 60.00
+        assert_eq!(stats.gasto_medio, Some(Decimal::new(3000, 2))); // 30.00
+        assert_eq!(stats.productos_unicos, Some(2));
 
         Ok(())
     }
