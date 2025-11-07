@@ -58,6 +58,7 @@ pub async fn get_user_ticket_history(
 pub struct UserStats {
     pub total_tickets: Option<i64>,
     pub total_gastado: Option<Decimal>,
+    pub gasto_medio: Option<Decimal>,
     pub productos_unicos: Option<i64>,
 }
 
@@ -65,13 +66,30 @@ pub async fn get_user_stats(pool: &PgPool, usuario_email: &str) -> Result<UserSt
     let stats = sqlx::query_as!(
         UserStats,
         r#"
+        WITH compras_stats AS (
+            SELECT
+                COUNT(*)::bigint AS total_tickets,
+                COALESCE(SUM(total), 0)::numeric AS total_gastado,
+                CASE
+                    WHEN COUNT(*) = 0 THEN NULL::numeric
+                    ELSE ROUND(SUM(total) / COUNT(*), 2)
+                END AS gasto_medio
+            FROM compras
+            WHERE usuario_email = $1
+        ),
+        productos_stats AS (
+            SELECT
+                COUNT(DISTINCT cp.producto_nombre)::bigint AS productos_unicos
+            FROM compras c
+            LEFT JOIN compras_productos cp ON c.numero_factura = cp.compra_numero_factura
+            WHERE c.usuario_email = $1
+        )
         SELECT
-            COUNT(DISTINCT c.numero_factura) as "total_tickets?",
-            COALESCE(SUM(c.total), 0) as "total_gastado?",
-            COUNT(DISTINCT cp.producto_nombre) as "productos_unicos?"
-        FROM compras c
-        LEFT JOIN compras_productos cp ON c.numero_factura = cp.compra_numero_factura
-        WHERE c.usuario_email = $1
+            compras_stats.total_tickets as "total_tickets?",
+            compras_stats.total_gastado as "total_gastado?",
+            compras_stats.gasto_medio as "gasto_medio?",
+            productos_stats.productos_unicos as "productos_unicos?"
+        FROM compras_stats, productos_stats
         "#,
         usuario_email
     )
@@ -142,28 +160,92 @@ mod tests {
         .execute(&pool)
         .await?;
 
-        // Crear compra
-        sqlx::query!(
-            r#"
-            INSERT INTO compras (numero_factura, usuario_email, fecha_hora, total)
-            VALUES ($1, $2, $3, $4)
-            "#,
-            "0001-001-999999",
-            "stats@example.com",
-            NaiveDate::from_ymd_opt(2025, 1, 15)
-                .unwrap()
-                .and_hms_opt(10, 30, 0)
-                .unwrap(),
-            Decimal::new(5000, 2) // 50.00
-        )
-        .execute(&pool)
-        .await?;
+        // Crear productos de referencia
+        for nombre in ["LECHE ENTERA", "PAN DE MOLDE"] {
+            sqlx::query!(
+                "INSERT INTO productos (nombre, unidad) VALUES ($1, 'unidad')",
+                nombre
+            )
+            .execute(&pool)
+            .await?;
+        }
+
+        // Crear dos compras con totales distintos
+        let compras = vec![
+            (
+                "0001-001-999999",
+                NaiveDate::from_ymd_opt(2025, 1, 15)
+                    .unwrap()
+                    .and_hms_opt(10, 30, 0)
+                    .unwrap(),
+                Decimal::new(5000, 2), // 50.00
+            ),
+            (
+                "0001-001-999998",
+                NaiveDate::from_ymd_opt(2025, 2, 10)
+                    .unwrap()
+                    .and_hms_opt(12, 0, 0)
+                    .unwrap(),
+                Decimal::new(7000, 2), // 70.00
+            ),
+        ];
+
+        for (numero_factura, fecha_hora, total) in &compras {
+            sqlx::query!(
+                r#"
+                INSERT INTO compras (numero_factura, usuario_email, fecha_hora, total)
+                VALUES ($1, $2, $3, $4)
+                "#,
+                numero_factura,
+                "stats@example.com",
+                fecha_hora,
+                total
+            )
+            .execute(&pool)
+            .await?;
+        }
+
+        // Asociar productos al primer ticket (para probar duplicados en el JOIN)
+        for (producto, precio_total) in [
+            ("LECHE ENTERA", Decimal::new(3000, 2)),
+            ("PAN DE MOLDE", Decimal::new(2000, 2)),
+        ] {
+            let iva_porcentaje = Decimal::new(2100, 2); // 21.00
+            let descuento = Decimal::ZERO;
+            let iva_importe = Decimal::ZERO;
+            sqlx::query!(
+                r#"
+                INSERT INTO compras_productos (
+                    compra_numero_factura,
+                    producto_nombre,
+                    cantidad,
+                    precio_unitario,
+                    precio_total,
+                    descuento,
+                    iva_porcentaje,
+                    iva_importe
+                )
+                VALUES ($1, $2, 1, $3, $4, $5, $6, $7)
+                "#,
+                "0001-001-999999",
+                producto,
+                precio_total,
+                precio_total,
+                descuento,
+                iva_porcentaje,
+                iva_importe
+            )
+            .execute(&pool)
+            .await?;
+        }
 
         // Test
         let stats = get_user_stats(&pool, "stats@example.com").await?;
 
-        assert_eq!(stats.total_tickets, Some(1));
-        assert_eq!(stats.total_gastado, Some(Decimal::new(5000, 2)));
+        assert_eq!(stats.total_tickets, Some(2));
+        assert_eq!(stats.total_gastado, Some(Decimal::new(12000, 2)));
+        assert_eq!(stats.gasto_medio, Some(Decimal::new(6000, 2)));
+        assert_eq!(stats.productos_unicos, Some(2));
 
         Ok(())
     }

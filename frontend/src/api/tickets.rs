@@ -230,9 +230,9 @@ pub struct TicketHistoryItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserStats {
     pub total_tickets: Option<i64>,
-    pub gasto_total: Option<f64>,
-    pub gasto_promedio: Option<f64>,
-    pub ultimo_ticket: Option<String>,
+    pub total_gastado: Option<String>,
+    pub gasto_medio: Option<String>,
+    pub productos_unicos: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

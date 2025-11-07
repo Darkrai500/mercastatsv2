@@ -15,6 +15,13 @@ enum SortOrder {
     Descending,
 }
 
+fn parse_amount(value: &Option<String>) -> f64 {
+    value
+        .as_ref()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(0.0)
+}
+
 #[component]
 pub fn TicketHistory() -> impl IntoView {
     let (history_data, set_history_data) = create_signal(None::<TicketHistoryResponse>);
@@ -143,7 +150,7 @@ pub fn TicketHistory() -> impl IntoView {
                                 </svg>
                             </div>
                             <div class="text-3xl font-bold text-gray-900 mb-1">
-                                {format!("{:.2}€", data.stats.gasto_total.unwrap_or(0.0))}
+                                {format!("{:.2}€", parse_amount(&data.stats.total_gastado))}
                             </div>
                             <div class="text-sm text-gray-600">"Gasto total"</div>
                         </div>
@@ -157,16 +164,13 @@ pub fn TicketHistory() -> impl IntoView {
                                 </svg>
                             </div>
                             <div class="text-3xl font-bold text-gray-900 mb-1">
-                                {format!("{:.2}€", data.stats.gasto_promedio.unwrap_or(0.0))}
+                                {format!("{:.2}€", parse_amount(&data.stats.gasto_medio))}
                             </div>
                             <div class="text-sm text-gray-600">"Gasto promedio"</div>
                             <div class="text-xs text-gray-500 mt-1">
                                 {format!(
-                                    "Ultimo ticket: {}",
-                                    data.stats
-                                        .ultimo_ticket
-                                        .clone()
-                                        .unwrap_or_else(|| "Sin registros".to_string())
+                                    "Productos únicos registrados: {}",
+                                    data.stats.productos_unicos.unwrap_or(0)
                                 )}
                             </div>
                         </div>
