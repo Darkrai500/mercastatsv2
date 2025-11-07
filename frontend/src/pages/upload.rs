@@ -284,21 +284,6 @@ pub fn Upload() -> impl IntoView {
                             }}
                         </div>
 
-                        // Info cards
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-gray-200">
-                            <div class="text-center p-4 bg-primary-50 rounded-lg">
-                                <div class="text-3xl font-bold text-primary-600 mb-2">"0"</div>
-                                <div class="text-sm text-gray-600">"Tickets subidos"</div>
-                            </div>
-                            <div class="text-center p-4 bg-accent-50 rounded-lg">
-                                <div class="text-3xl font-bold text-accent-600 mb-2">"0€"</div>
-                                <div class="text-sm text-gray-600">"Gasto total"</div>
-                            </div>
-                            <div class="text-center p-4 bg-green-50 rounded-lg">
-                                <div class="text-3xl font-bold text-green-600 mb-2">"0"</div>
-                                <div class="text-sm text-gray-600">"Productos únicos"</div>
-                            </div>
-                        </div>
                     </div>
             </Card>
 
