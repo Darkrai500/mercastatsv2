@@ -62,6 +62,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/ocr", routes::ocr_router(state.clone()))
         // Rutas de tickets
         .nest("/api/tickets", routes::tickets_router(state.clone()))
+        // Rutas de estadísticas
+        .nest("/api/stats", routes::stats_router(state.clone()))
         // CORS middleware
         .layer(CorsLayer::permissive());
 

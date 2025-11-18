@@ -5,7 +5,7 @@ mod pages;
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
-use pages::{Dashboard, Login, Register};
+use pages::{Dashboard, Login, Register, Stats};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
@@ -37,6 +37,7 @@ fn App() -> impl IntoView {
                 <Route path="/" view=Login />
                 <Route path="/register" view=Register />
                 <Route path="/dashboard" view=Dashboard />
+                <Route path="/stats" view=Stats />
                 <Route path="/*any" view=NotFound />
             </Routes>
         </Router>

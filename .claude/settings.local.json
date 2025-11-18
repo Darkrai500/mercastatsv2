@@ -5,7 +5,9 @@
       "Bash(cargo check:*)",
       "Bash(cargo build:*)",
       "Bash(cargo run:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
