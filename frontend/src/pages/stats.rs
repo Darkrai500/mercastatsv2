@@ -37,7 +37,7 @@ pub fn Stats() -> impl IntoView {
                     }
                 }>
                     {move || {
-                        match stats() {
+                        match stats.get() {
                             Some(Ok(data)) => {
                                 view! {
                                     <div class="space-y-6">
@@ -203,14 +203,17 @@ fn TopProductsChart(title: String, products: Vec<TopProductItem>) -> impl IntoVi
         data: product_values,
     };
 
+    let chart_id = format!("products-{}", title.replace(" ", "-"));
+    let title_clone = title.clone();
+
     view! {
         <div class="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">
-                {title}
+                {title_clone}
             </h2>
 
             <Chart
-                id=format!("products-{}", title.replace(" ", "-"))
+                id=chart_id
                 chart_type=ChartType::BarHorizontal
                 series=vec![series_data]
                 categories=product_names
@@ -234,14 +237,17 @@ fn DistributionChart(title: String, data: Vec<TimeDistributionPoint>) -> impl In
         data: values,
     };
 
+    let chart_id = format!("distribution-{}", title.replace(" ", "-"));
+    let title_clone = title.clone();
+
     view! {
         <div class="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">
-                {title}
+                {title_clone}
             </h2>
 
             <Chart
-                id=format!("distribution-{}", title.replace(" ", "-"))
+                id=chart_id
                 chart_type=ChartType::Bar
                 series=vec![series_data]
                 categories=labels

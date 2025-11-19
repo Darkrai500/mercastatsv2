@@ -15,22 +15,22 @@ pub fn AnimatedCounter(
     decimals: usize,
 
     /// Prefijo (ej: "€", "$")
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     prefix: String,
 
     /// Sufijo (ej: "€", "%")
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     suffix: String,
 
     /// Clase CSS personalizada
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     class: String,
 ) -> impl IntoView {
     let (current_value, set_current_value) = create_signal(0.0);
     let (is_animating, set_is_animating) = create_signal(true);
 
     create_effect(move |_| {
-        if is_animating() && duration > 0 {
+        if is_animating.get() && duration > 0 {
             let start_time = js_sys::Date::now();
             let target_time = start_time + duration as f64;
 
@@ -39,34 +39,36 @@ pub fn AnimatedCounter(
                     let current_time = js_sys::Date::now();
 
                     if current_time >= target_time {
-                        set_current_value(target);
-                        set_is_animating(false);
+                        set_current_value.set(target);
+                        set_is_animating.set(false);
                     } else {
                         let progress = (current_time - start_time) / (target_time - start_time);
                         let eased_progress = ease_out_cubic(progress);
                         let new_value = target * eased_progress;
-                        set_current_value(new_value);
+                        set_current_value.set(new_value);
                     }
                 },
-                16, // ~60fps
+                Duration::from_millis(16), // ~60fps
             );
 
-            on_cleanup(move || {
-                interval_id.clear();
-            });
+            if let Ok(handle) = interval_id {
+                on_cleanup(move || {
+                    handle.clear();
+                });
+            }
         } else {
-            set_current_value(target);
+            set_current_value.set(target);
         }
     });
 
     let formatted_value = move || {
-        let formatted = format!("{:.prec$}", current_value(), prec = decimals);
+        let formatted = format!("{:.prec$}", current_value.get(), prec = decimals);
         format!("{}{}{}", prefix, formatted, suffix)
     };
 
     view! {
         <span class=format!("font-mono text-lg font-semibold text-gray-900 {} {}",
-            if is_animating() { "animate-pulse-glow" } else { "" },
+            if is_animating.get() { "animate-pulse-glow" } else { "" },
             class
         )>
             {formatted_value}
@@ -93,11 +95,11 @@ pub fn KpiCard(
     decimals: usize,
 
     /// Prefijo (ej: "€")
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     prefix: String,
 
     /// Sufijo (ej: "%")
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     suffix: String,
 
     /// Porcentaje de cambio (opcional)
@@ -109,11 +111,11 @@ pub fn KpiCard(
     is_positive_trend: bool,
 
     /// Icono o elemento personalizado
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     icon: String,
 
     /// Clase CSS personalizada
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     class: String,
 
     /// Delay de animación en milisegundos
@@ -142,20 +144,22 @@ pub fn KpiCard(
         }
     });
 
+    let delay_class = match animation_delay {
+        0 => "".to_string(),
+        100 => "delay-100".to_string(),
+        200 => "delay-200".to_string(),
+        300 => "delay-300".to_string(),
+        400 => "delay-400".to_string(),
+        500 => "delay-500".to_string(),
+        _ => "".to_string(),
+    };
+
     view! {
         <div
             class=format!(
                 "bg-white rounded-lg border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-300 animate-slide-up {} {}",
                 class,
-                match animation_delay {
-                    0 => "",
-                    100 => "delay-100",
-                    200 => "delay-200",
-                    300 => "delay-300",
-                    400 => "delay-400",
-                    500 => "delay-500",
-                    _ => "",
-                }
+                delay_class
             )
         >
             <div class="flex items-start justify-between">
@@ -171,7 +175,7 @@ pub fn KpiCard(
                             prefix=prefix.clone()
                             suffix=suffix.clone()
                             duration=1200
-                            class="text-2xl"
+                            class="text-2xl".to_string()
                         />
                     </div>
 

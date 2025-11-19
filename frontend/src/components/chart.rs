@@ -1,9 +1,8 @@
-use js_sys::Object;
 use leptos::*;
 use serde_json::json;
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
-use web_sys::document;
 
 #[wasm_bindgen]
 extern "C" {
@@ -74,148 +73,150 @@ pub fn Chart(
     height: i32,
 
     /// Título del gráfico (opcional)
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     title: String,
 
     /// Subtítulo (opcional)
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     subtitle: String,
 
     /// Clase CSS personalizada
-    #[prop(default = "")]
+    #[prop(default = "".to_string())]
     class: String,
 ) -> impl IntoView {
     let container_id = id.clone();
     let chart_type_str = chart_type.as_str().to_string();
 
     create_effect(move |_| {
+        // Clone variables para usarlas en el timeout
+        let container_id_clone = container_id.clone();
+        let chart_type_str_clone = chart_type_str.clone();
+        let series_clone = series.clone();
+        let categories_clone = categories.clone();
+        let title_clone = title.clone();
+        let subtitle_clone = subtitle.clone();
+
         // Esperar a que el DOM esté listo
-        let _ = set_timeout(
+        set_timeout(
             move || {
-                if let Some(container) = document().get_element_by_id(&container_id) {
-                    let container_el = container
-                        .dyn_into::<web_sys::HtmlElement>()
-                        .unwrap_or_else(|_| panic!("El contenedor no es un HtmlElement"));
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        if let Some(container) = document.get_element_by_id(&container_id_clone) {
+                            if let Ok(container_el) = container.dyn_into::<web_sys::HtmlElement>() {
+                                // Construir opciones del gráfico
+                                let mut options = json!({
+                                    "chart": {
+                                        "type": chart_type_str_clone,
+                                        "height": height,
+                                        "sparkline": {
+                                            "enabled": false
+                                        },
+                                        "toolbar": {
+                                            "show": true,
+                                            "tools": {
+                                                "download": true,
+                                                "selection": true,
+                                                "zoom": true,
+                                                "zoomin": true,
+                                                "zoomout": true,
+                                                "pan": true,
+                                                "reset": true
+                                            }
+                                        },
+                                        "animations": {
+                                            "enabled": true,
+                                            "easing": "easeinout",
+                                            "speed": 800,
+                                            "animateGradually": {
+                                                "enabled": true,
+                                                "delay": 150
+                                            },
+                                            "dynamicAnimation": {
+                                                "enabled": true,
+                                                "speed": 150
+                                            }
+                                        }
+                                    },
+                                    "series": series_clone
+                                        .iter()
+                                        .map(|s| json!({
+                                            "name": s.name,
+                                            "data": s.data,
+                                        }))
+                                        .collect::<Vec<_>>(),
+                                    "xaxis": {
+                                        "categories": categories_clone
+                                    },
+                                    "stroke": {
+                                        "curve": "smooth",
+                                        "width": 2
+                                    },
+                                    "colors": [
+                                        "#0ea5e9",  // primary-500
+                                        "#d946ef",  // accent-500
+                                        "#10b981",  // emerald-500
+                                        "#f59e0b",  // amber-500
+                                        "#8b5cf6",  // violet-500
+                                    ],
+                                    "grid": {
+                                        "borderColor": "#e2e8f0",
+                                        "strokeDashArray": 3,
+                                        "xaxis": {
+                                            "lines": {
+                                                "show": false
+                                            }
+                                        }
+                                    },
+                                    "theme": {
+                                        "mode": "light",
+                                        "palette": "palette1"
+                                    },
+                                    "responsive": [{
+                                        "breakpoint": 768,
+                                        "options": {
+                                            "chart": {
+                                                "height": 250
+                                            }
+                                        }
+                                    }]
+                                });
 
-                    // Construir opciones del gráfico
-                    let mut options = json!({
-                        "chart": {
-                            "type": chart_type_str,
-                            "height": height,
-                            "sparkline": {
-                                "enabled": false
-                            },
-                            "toolbar": {
-                                "show": true,
-                                "tools": {
-                                    "download": true,
-                                    "selection": true,
-                                    "zoom": true,
-                                    "zoomin": true,
-                                    "zoomout": true,
-                                    "pan": true,
-                                    "reset": true
+                                // Añadir título si existe
+                                if !title_clone.is_empty() {
+                                    options["title"] = json!({
+                                        "text": title_clone,
+                                        "align": "left",
+                                        "style": {
+                                            "fontSize": "16px",
+                                            "fontWeight": 600,
+                                            "color": "#1f2937"
+                                        }
+                                    });
                                 }
-                            },
-                            "animations": {
-                                "enabled": true,
-                                "easing": "easeinout",
-                                "speed": 800,
-                                "animateGradually": {
-                                    "enabled": true,
-                                    "delay": 150
-                                },
-                                "dynamicAnimation": {
-                                    "enabled": true,
-                                    "speed": 150
+
+                                // Añadir subtítulo si existe
+                                if !subtitle_clone.is_empty() {
+                                    options["subtitle"] = json!({
+                                        "text": subtitle_clone,
+                                        "align": "left",
+                                        "style": {
+                                            "fontSize": "12px",
+                                            "color": "#6b7280"
+                                        }
+                                    });
+                                }
+
+                                // Convertir JSON a JsValue usando into()
+                                if let Ok(options_js) = JsValue::from_serde(&options) {
+                                    let chart = ApexCharts::new(container_el, options_js);
+                                    let _ = chart.render();
                                 }
                             }
-                        },
-                        "series": series
-                            .iter()
-                            .map(|s| json!({
-                                "name": s.name,
-                                "data": s.data,
-                            }))
-                            .collect::<Vec<_>>(),
-                        "xaxis": {
-                            "categories": categories
-                        },
-                        "stroke": {
-                            "curve": "smooth",
-                            "width": 2
-                        },
-                        "colors": [
-                            "#0ea5e9",  // primary-500
-                            "#d946ef",  // accent-500
-                            "#10b981",  // emerald-500
-                            "#f59e0b",  // amber-500
-                            "#8b5cf6",  // violet-500
-                        ],
-                        "grid": {
-                            "borderColor": "#e2e8f0",
-                            "strokeDashArray": 3,
-                            "xaxis": {
-                                "lines": {
-                                    "show": false
-                                }
-                            }
-                        },
-                        "theme": {
-                            "mode": "light",
-                            "palette": "palette1"
-                        },
-                        "responsive": [{
-                            "breakpoint": 768,
-                            "options": {
-                                "chart": {
-                                    "height": 250
-                                }
-                            }
-                        }]
-                    });
-
-                    // Añadir título si existe
-                    if !title.is_empty() {
-                        options["title"] = json!({
-                            "text": title,
-                            "align": "left",
-                            "style": {
-                                "fontSize": "16px",
-                                "fontWeight": 600,
-                                "color": "#1f2937"
-                            }
-                        });
-                    }
-
-                    // Añadir subtítulo si existe
-                    if !subtitle.is_empty() {
-                        options["subtitle"] = json!({
-                            "text": subtitle,
-                            "align": "left",
-                            "style": {
-                                "fontSize": "12px",
-                                "color": "#6b7280"
-                            }
-                        });
-                    }
-
-                    // Crear el gráfico
-                    match JsValue::from_serde(&options) {
-                        Ok(options_js) => {
-                            let chart = ApexCharts::new(container_el, options_js);
-                            let _ = chart.render();
-
-                            // Evitar memory leak guardando referencia en web_sys
-                            // (Idealmente guardaríamos esto en un RwSignal para poder destruirlo después)
-                        }
-                        Err(e) => {
-                            leptos::logging::error!("Error serializando opciones del gráfico:", e);
                         }
                     }
                 }
             },
-            100,
+            Duration::from_millis(100),
         );
     });
 

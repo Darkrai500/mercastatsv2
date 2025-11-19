@@ -90,9 +90,3 @@ pub async fn get_dashboard_stats() -> Result<DashboardStatsResponse, String> {
     }
 }
 
-/// Obtener estadísticas rápidas (KPIs)
-pub async fn get_quick_stats() -> Result<DashboardStatsResponse, String> {
-    // Por ahora, retorna el dashboard completo
-    // En el futuro podría ser un endpoint separado más ligero
-    get_dashboard_stats().await
-}
