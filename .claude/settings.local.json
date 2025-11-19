@@ -8,7 +8,8 @@
       "Bash(taskkill:*)",
       "Bash(cat:*)",
       "Bash(find:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(trunk build:*)"
     ],
     "deny": [],
     "ask": []
