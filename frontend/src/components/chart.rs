@@ -45,11 +45,15 @@ impl ChartType {
         match self {
             ChartType::Area => "area",
             ChartType::Bar => "bar",
-            ChartType::BarHorizontal => "barHorizontal",
+            ChartType::BarHorizontal => "bar", // ApexCharts uses "bar" with horizontal option
             ChartType::Line => "line",
             ChartType::Pie => "pie",
             ChartType::Donut => "donut",
         }
+    }
+
+    fn is_horizontal(&self) -> bool {
+        matches!(self, ChartType::BarHorizontal)
     }
 }
 
@@ -86,6 +90,7 @@ pub fn Chart(
 ) -> impl IntoView {
     let container_id = id.clone();
     let chart_type_str = chart_type.as_str().to_string();
+    let is_horizontal = chart_type.is_horizontal();
 
     create_effect(move |_| {
         // Clone variables para usarlas en el timeout
@@ -134,6 +139,15 @@ pub fn Chart(
                                             "dynamicAnimation": {
                                                 "enabled": true,
                                                 "speed": 150
+                                            }
+                                        }
+                                    },
+                                    "plotOptions": {
+                                        "bar": {
+                                            "horizontal": is_horizontal,
+                                            "borderRadius": 4,
+                                            "dataLabels": {
+                                                "position": "top"
                                             }
                                         }
                                     },
