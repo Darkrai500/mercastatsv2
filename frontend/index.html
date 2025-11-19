@@ -9,6 +9,9 @@
     <!-- Tailwind CSS via CDN (temporal, luego usaremos build) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- ApexCharts Library -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@latest/dist/apexcharts.min.js"></script>
+
     <!-- Tailwind config inline -->
     <script>
       tailwind.config = {
@@ -48,6 +51,23 @@
               'slide-up': 'slideUp 0.4s ease-out',
               'slide-down': 'slideDown 0.4s ease-out',
               'scale-in': 'scaleIn 0.3s ease-out',
+              'pulse-glow': 'pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            transitionDelay: {
+              0: '0ms',
+              100: '100ms',
+              200: '200ms',
+              300: '300ms',
+              400: '400ms',
+              500: '500ms',
+            },
+            animationDelay: {
+              0: '0ms',
+              100: '100ms',
+              200: '200ms',
+              300: '300ms',
+              400: '400ms',
+              500: '500ms',
             },
             keyframes: {
               fadeIn: {
@@ -65,6 +85,10 @@
               scaleIn: {
                 '0%': { transform: 'scale(0.95)', opacity: '0' },
                 '100%': { transform: 'scale(1)', opacity: '1' },
+              },
+              pulseGlow: {
+                '0%, 100%': { opacity: '1' },
+                '50%': { opacity: '0.5' },
               }
             }
           }

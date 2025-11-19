@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod stats;
 pub mod tickets;
 
 use serde::{Deserialize, Serialize};
