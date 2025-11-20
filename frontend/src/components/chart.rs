@@ -152,7 +152,7 @@ pub fn Chart(
                                             "horizontal": is_horizontal,
                                             "borderRadius": 10,
                                             "borderRadiusApplication": "end",
-                                            "distributed": is_horizontal,
+                                            "distributed": true,
                                             "dataLabels": {
                                                 "position": "center"
                                             }
