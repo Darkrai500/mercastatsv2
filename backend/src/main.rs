@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = services::init_python_worker() {
         tracing::error!("❌ Error CRÍTICO inicializando el worker de Python: {}", e);
         tracing::error!("El servidor no puede arrancar sin el subsistema OCR.");
-        return Err(Box::new(e));
+        return Err(e.into());
     }
     // =================================================================
 
