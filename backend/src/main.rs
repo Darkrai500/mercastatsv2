@@ -36,6 +36,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         e
     })?;
 
+    // =================================================================
+    // FASE DE PRE-CALENTAMIENTO (WARM-UP)
+    // =================================================================
+    // Esto bloqueará el inicio unos segundos, pero garantiza velocidad después.
+    if let Err(e) = services::init_python_worker() {
+        tracing::error!("❌ Error CRÍTICO inicializando el worker de Python: {}", e);
+        tracing::error!("El servidor no puede arrancar sin el subsistema OCR.");
+        return Err(e.into());
+    }
+    // =================================================================
+
     tracing::info!("Iniciando servidor en {}:{}", config.host, config.port);
 
     // Crear pool de conexiones a la BD
