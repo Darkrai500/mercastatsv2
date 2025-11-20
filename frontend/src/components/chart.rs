@@ -154,7 +154,7 @@ pub fn Chart(
                                             "borderRadiusApplication": "end",
                                             "distributed": is_horizontal,
                                             "dataLabels": {
-                                                "position": if is_horizontal { "center" } else { "top" }
+                                                "position": "center"
                                             }
                                         }
                                     },
@@ -163,17 +163,13 @@ pub fn Chart(
                                         "style": {
                                             "fontSize": "12px",
                                             "fontWeight": 700,
-                                            "colors": ["#0f172a"]
+                                            "colors": ["#ffffff"]
                                         },
                                         "background": {
-                                            "enabled": true,
-                                            "foreColor": "#0f172a",
-                                            "padding": 6,
-                                            "borderRadius": 10,
-                                            "opacity": 0.9
+                                            "enabled": false
                                         },
-                                        "offsetX": if is_horizontal { -12 } else { 0 },
-                                        "offsetY": if is_horizontal { 0 } else { -10 }
+                                        "offsetX": 0,
+                                        "offsetY": 0
                                     },
                                     "series": series_clone
                                         .iter()
