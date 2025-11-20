@@ -15,7 +15,12 @@ extern "C" {
     pub fn render(this: &ApexCharts) -> js_sys::Promise;
 
     #[wasm_bindgen(method)]
-    pub fn updateOptions(this: &ApexCharts, options: JsValue, redraw: bool, animate: bool) -> js_sys::Promise;
+    pub fn updateOptions(
+        this: &ApexCharts,
+        options: JsValue,
+        redraw: bool,
+        animate: bool,
+    ) -> js_sys::Promise;
 
     #[wasm_bindgen(method)]
     pub fn updateSeries(this: &ApexCharts, series: JsValue, animate: bool) -> js_sys::Promise;
@@ -145,11 +150,30 @@ pub fn Chart(
                                     "plotOptions": {
                                         "bar": {
                                             "horizontal": is_horizontal,
-                                            "borderRadius": 4,
+                                            "borderRadius": 10,
+                                            "borderRadiusApplication": "end",
+                                            "distributed": is_horizontal,
                                             "dataLabels": {
-                                                "position": "top"
+                                                "position": if is_horizontal { "center" } else { "top" }
                                             }
                                         }
+                                    },
+                                    "dataLabels": {
+                                        "enabled": true,
+                                        "style": {
+                                            "fontSize": "12px",
+                                            "fontWeight": 700,
+                                            "colors": ["#0f172a"]
+                                        },
+                                        "background": {
+                                            "enabled": true,
+                                            "foreColor": "#0f172a",
+                                            "padding": 6,
+                                            "borderRadius": 10,
+                                            "opacity": 0.9
+                                        },
+                                        "offsetX": if is_horizontal { -12 } else { 0 },
+                                        "offsetY": if is_horizontal { 0 } else { -10 }
                                     },
                                     "series": series_clone
                                         .iter()
@@ -166,12 +190,23 @@ pub fn Chart(
                                         "width": 2
                                     },
                                     "colors": [
-                                        "#0ea5e9",  // primary-500
-                                        "#d946ef",  // accent-500
-                                        "#10b981",  // emerald-500
-                                        "#f59e0b",  // amber-500
-                                        "#8b5cf6",  // violet-500
+                                        "#38bdf8",  // sky-400
+                                        "#c084fc",  // purple-400
+                                        "#34d399",  // emerald-400
+                                        "#f97316",  // orange-500
+                                        "#fb7185",  // rose-400
                                     ],
+                                    "fill": {
+                                        "type": "gradient",
+                                        "gradient": {
+                                            "type": if is_horizontal { "horizontal" } else { "vertical" },
+                                            "shade": "light",
+                                            "shadeIntensity": 0.4,
+                                            "opacityFrom": 0.95,
+                                            "opacityTo": 0.85,
+                                            "stops": [0, 50, 100]
+                                        }
+                                    },
                                     "grid": {
                                         "borderColor": "#e2e8f0",
                                         "strokeDashArray": 3,
