@@ -72,6 +72,31 @@ pub enum OcrError {
     Join(#[from] tokio::task::JoinError),
 }
 
+/// Inicializa el entorno de Python y fuerza la carga de módulos pesados.
+/// Debe ejecutarse al inicio del programa (Warm-up).
+///
+/// Esta función configura el `sys.path` y carga el módulo procesador de tickets,
+/// lo que provoca que Python importe todas las dependencias pesadas
+/// (pdfplumber, pdfminer.six, pydantic) en tiempo de arranque en lugar de
+/// en la primera petición.
+///
+/// # Errors
+///
+/// Retorna `OcrError::Python` si no se puede cargar el módulo o configurar Python.
+pub fn init_python_worker() -> Result<(), OcrError> {
+    tracing::info!("🐍 Warm-up: Inicializando intérprete de Python y cargando dependencias...");
+
+    Python::with_gil(|py| {
+        // Forzamos la carga del módulo procesador.
+        // Al hacer esto, Python ejecuta todos los imports de nivel superior 
+        // en 'processor.py' y 'pdf_parser.py' (incluyendo pdfplumber).
+        load_processor_module(py)?;
+        
+        tracing::info!("✅ Warm-up: Módulos Python cargados y listos en memoria.");
+        Ok(())
+    })
+}
+
 /// Procesa un ticket PDF utilizando la lógica Python embebida.
 pub async fn process_ticket(
     request: ProcessTicketRequest,
