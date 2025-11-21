@@ -161,15 +161,53 @@ pub fn Chart(
                                     "dataLabels": {
                                         "enabled": true,
                                         "style": {
-                                            "fontSize": "12px",
+                                            "fontSize": "13px",
                                             "fontWeight": 700,
-                                            "colors": ["#ffffff"]
+                                            "colors": ["#334155"]
                                         },
                                         "background": {
-                                            "enabled": false
+                                            "enabled": true,
+                                            "foreColor": "#334155",
+                                            "padding": 6,
+                                            "borderRadius": 6,
+                                            "borderWidth": 1,
+                                            "borderColor": "#e2e8f0",
+                                            "opacity": 0.95,
+                                            "dropShadow": {
+                                                "enabled": false
+                                            }
                                         },
-                                        "offsetX": 0,
-                                        "offsetY": 0
+                                        "offsetY": -5
+                                    },
+                                    "yaxis": {
+                                        "decimalsInFloat": 2,
+                                        "labels": {
+                                            "style": {
+                                                "fontSize": "12px",
+                                                "fontFamily": "Inter, sans-serif",
+                                                "colors": ["#64748b"]
+                                            }
+                                        }
+                                    },
+                                    "grid": {
+                                        "borderColor": "#f1f5f9",
+                                        "strokeDashArray": 4,
+                                        "xaxis": {
+                                            "lines": {
+                                                "show": true
+                                            }
+                                        },
+                                        "yaxis": {
+                                            "lines": {
+                                                "show": true
+                                            }
+                                        },
+                                        "padding": {
+                                            "top": 0,
+                                            "right": 20,
+                                            "bottom": 0,
+                                            "left": 20
+                                        }
                                     },
                                     "series": series_clone
                                         .iter()

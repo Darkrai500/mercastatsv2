@@ -97,7 +97,7 @@ pub async fn get_monthly_evolution(
     Query(params): Query<MonthlyEvolutionQueryParams>,
 ) -> AppResult<Json<MonthlyEvolutionResponse>> {
     let user_email = auth_user.email;
-    let months = params.months.clamp(3, 24) as i32;
+    let months = params.months.clamp(3, 1000) as i32;
 
     let months_data = get_monthly_spending(&state.db_pool, &user_email, months).await?;
 

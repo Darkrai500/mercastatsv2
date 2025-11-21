@@ -131,32 +131,67 @@ pub async fn get_monthly_spending(
     usuario_email: &str,
     months: i32,
 ) -> Result<Vec<MonthlySpendPoint>, sqlx::Error> {
-    let months = months.clamp(1, 24);
-
-    let monthly = sqlx::query_as!(
-        MonthlySpendPoint,
-        r#"
-        WITH months AS (
-            SELECT DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' * generate_series(0, $2::int - 1) as month_start
+    if months > 100 {
+        // "All Time" mode: dynamic range from first purchase
+        let monthly = sqlx::query_as!(
+            MonthlySpendPoint,
+            r#"
+            WITH bounds AS (
+                SELECT 
+                    COALESCE(MIN(DATE_TRUNC('month', fecha_hora)), DATE_TRUNC('month', CURRENT_DATE)) as first_month,
+                    DATE_TRUNC('month', CURRENT_DATE) as last_month
+                FROM compras
+                WHERE usuario_email = $1
+            ),
+            months_series AS (
+                SELECT generate_series(first_month, last_month, '1 month') as month_start
+                FROM bounds
+            )
+            SELECT
+                TO_CHAR(ms.month_start, 'YYYY-MM') as "month!",
+                COALESCE(SUM(c.total), 0)::numeric as "total!",
+                COUNT(c.numero_factura)::bigint as "ticket_count!"
+            FROM months_series ms
+            LEFT JOIN compras c
+                ON DATE_TRUNC('month', c.fecha_hora) = ms.month_start
+                AND c.usuario_email = $1
+            GROUP BY ms.month_start
+            ORDER BY ms.month_start
+            "#,
+            usuario_email
         )
-        SELECT
-            TO_CHAR(months.month_start, 'YYYY-MM') as "month!",
-            COALESCE(SUM(c.total), 0)::numeric as "total!",
-            COUNT(c.numero_factura)::bigint as "ticket_count!"
-        FROM months
-        LEFT JOIN compras c
-            ON DATE_TRUNC('month', c.fecha_hora) = months.month_start
-            AND c.usuario_email = $1
-        GROUP BY months.month_start
-        ORDER BY months.month_start
-        "#,
-        usuario_email,
-        months
-    )
-    .fetch_all(pool)
-    .await?;
+        .fetch_all(pool)
+        .await?;
 
-    Ok(monthly)
+        Ok(monthly)
+    } else {
+        let months = months.clamp(1, 100);
+
+        let monthly = sqlx::query_as!(
+            MonthlySpendPoint,
+            r#"
+            WITH months AS (
+                SELECT DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' * generate_series(0, $2::int - 1) as month_start
+            )
+            SELECT
+                TO_CHAR(months.month_start, 'YYYY-MM') as "month!",
+                COALESCE(SUM(c.total), 0)::numeric as "total!",
+                COUNT(c.numero_factura)::bigint as "ticket_count!"
+            FROM months
+            LEFT JOIN compras c
+                ON DATE_TRUNC('month', c.fecha_hora) = months.month_start
+                AND c.usuario_email = $1
+            GROUP BY months.month_start
+            ORDER BY months.month_start
+            "#,
+            usuario_email,
+            months
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(monthly)
+    }
 }
 
 /// Comparación de gasto mes actual vs mes anterior
