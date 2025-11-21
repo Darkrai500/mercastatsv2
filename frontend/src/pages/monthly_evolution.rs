@@ -5,7 +5,6 @@ use leptos::*;
 #[component]
 pub fn MonthlyEvolution() -> impl IntoView {
     let (months_filter, set_months_filter) = create_signal(12u32);
-    let (show_significant, set_show_significant) = create_signal(false);
 
     let monthly_data = create_resource(
         move || months_filter.get(),
@@ -33,41 +32,29 @@ pub fn MonthlyEvolution() -> impl IntoView {
                         </p>
                     </div>
 
-                    <div class="flex flex-col sm:flex-row items-end sm:items-center gap-4">
-                        <div class="flex items-center gap-2 bg-white/80 backdrop-blur px-2 py-2 rounded-2xl border border-gray-100 shadow-sm">
-                            {[6u32, 12u32, 999u32].into_iter().map(|months| {
-                                let active = move || months_filter.get() == months;
-                                let button_class = move || {
-                                    let base = "px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200";
-                                    if active() {
-                                        format!("{base} bg-primary-600 text-white shadow-md shadow-primary-200")
-                                    } else {
-                                        format!("{base} text-gray-600 hover:text-gray-900 hover:bg-gray-100")
-                                    }
-                                };
-                                let label = if months == 999 { "All Time" } else { match months { 6 => "6M", 12 => "12M", _ => "" } };
-                                let label_text = if label.is_empty() { format!("{}M", months) } else { label.to_string() };
-
-                                view! {
-                                    <button
-                                        class=button_class
-                                        on:click=move |_| set_months_filter.set(months)
-                                    >
-                                        {label_text}
-                                    </button>
+                    <div class="flex items-center gap-2 bg-white/80 backdrop-blur px-2 py-2 rounded-2xl border border-gray-100 shadow-sm">
+                        {[6u32, 12u32, 999u32].into_iter().map(|months| {
+                            let active = move || months_filter.get() == months;
+                            let button_class = move || {
+                                let base = "px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200";
+                                if active() {
+                                    format!("{base} bg-primary-600 text-white shadow-md shadow-primary-200")
+                                } else {
+                                    format!("{base} text-gray-600 hover:text-gray-900 hover:bg-gray-100")
                                 }
-                            }).collect_view()}
-                        </div>
-                        
-                        <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none bg-white/50 px-3 py-2 rounded-xl border border-transparent hover:border-gray-200 transition-all">
-                            <input
-                                type="checkbox"
-                                class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                                prop:checked=move || show_significant.get()
-                                on:change=move |ev| set_show_significant.set(event_target_checked(&ev))
-                            />
-                            "Solo relevantes"
-                        </label>
+                            };
+                            let label = if months == 999 { "All Time" } else { match months { 6 => "6M", 12 => "12M", _ => "" } };
+                            let label_text = if label.is_empty() { format!("{}M", months) } else { label.to_string() };
+
+                            view! {
+                                <button
+                                    class=button_class
+                                    on:click=move |_| set_months_filter.set(months)
+                                >
+                                    {label_text}
+                                </button>
+                            }
+                        }).collect_view()}
                     </div>
                 </header>
 
@@ -76,7 +63,7 @@ pub fn MonthlyEvolution() -> impl IntoView {
                         match monthly_data.get() {
                             Some(Ok(data)) => {
                                 let payload = data.clone();
-                                view! { <MonthlyContent data=payload months_filter=months_filter.get() show_significant=show_significant.get() /> }.into_view()
+                                view! { <MonthlyContent data=payload months_filter=months_filter.get() /> }.into_view()
                             }
                             Some(Err(err)) => view! {
                                 <div class="bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 animate-fade-in">
@@ -94,33 +81,51 @@ pub fn MonthlyEvolution() -> impl IntoView {
 }
 
 #[component]
-fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32, show_significant: bool) -> impl IntoView {
+fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32) -> impl IntoView {
     let current_total = parse_decimal(&data.current_month_total).unwrap_or(0.0);
     let previous_total = parse_decimal(&data.previous_month_total).unwrap_or(0.0);
     let average_monthly = parse_decimal(&data.average_monthly).unwrap_or(0.0);
     let year_to_date = parse_decimal(&data.year_to_date_total).unwrap_or(0.0);
 
     // Filter logic
-    let all_values: Vec<f64> = data.months.iter().map(|m| parse_decimal(&m.total).unwrap_or(0.0)).collect();
-    let max_val = all_values.iter().fold(0.0f64, |a, &b| a.max(b));
+    let filtered_months: Vec<_> = if months_filter == 999 {
+        // All Time mode: Dynamic filtering
+        // First, filter out months with zero spending
+        let non_zero_months: Vec<_> = data.months.iter()
+            .filter(|m| {
+                let val = parse_decimal(&m.total).unwrap_or(0.0);
+                val > 0.001
+            })
+            .cloned()
+            .collect();
 
-    let filtered_months: Vec<_> = data.months.iter().filter(|m| {
-        let val = parse_decimal(&m.total).unwrap_or(0.0);
-        
-        // Rule 1: If All Time (999), filter zeros.
-        if months_filter == 999 && val <= 0.001 {
-            return false;
+        // If we have many months (> 12), start filtering by average
+        if non_zero_months.len() > 12 {
+            // Calculate average from non-zero months
+            let sum: f64 = non_zero_months.iter()
+                .map(|m| parse_decimal(&m.total).unwrap_or(0.0))
+                .sum();
+            let avg = if !non_zero_months.is_empty() {
+                sum / non_zero_months.len() as f64
+            } else {
+                0.0
+            };
+
+            // Filter: only show months with spending >= average
+            non_zero_months.into_iter()
+                .filter(|m| {
+                    let val = parse_decimal(&m.total).unwrap_or(0.0);
+                    val >= avg
+                })
+                .collect()
+        } else {
+            // Not too many months, show all non-zero
+            non_zero_months
         }
-        
-        // Rule 2: If "Significant Only", filter low values (< 10% of max).
-        if show_significant {
-            if val < (max_val * 0.1) {
-                return false;
-            }
-        }
-        
-        true
-    }).cloned().collect();
+    } else {
+        // For 6M and 12M modes, show all months (including zeros)
+        data.months.iter().cloned().collect()
+    };
 
     let categories: Vec<String> = filtered_months
         .iter()
@@ -133,12 +138,26 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32, show_signi
             (val * 100.0).round() / 100.0
         })
         .collect();
+
+    // Debug logging
+    leptos::logging::log!("Filtered months count: {}", filtered_months.len());
+    leptos::logging::log!("Categories: {:?}", categories);
+    leptos::logging::log!("Values: {:?}", values);
+
     let peak_value = values.iter().copied().fold(0.0, f64::max);
     let trough_value = values
         .iter()
         .copied()
         .fold(f64::INFINITY, f64::min);
-    let rolling = moving_average(&values, 3);
+
+    // Calculate moving average only on relevant (non-zero) months in All Time mode
+    let rolling = if months_filter == 999 {
+        // In All Time mode, calculate moving average only on the filtered (relevant) values
+        moving_average(&values, 3)
+    } else {
+        // In 6M/12M modes, use standard moving average
+        moving_average(&values, 3)
+    };
 
     let mut series = Vec::with_capacity(2);
     series.push(ChartSeriesData {
@@ -204,15 +223,28 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32, show_signi
                         </span>
                     </div>
 
-                    <Chart
-                        id="monthly-evolution-chart".to_string()
-                        chart_type=ChartType::Area
-                        series=series
-                        categories=categories.clone()
-                        height=420
-                        title="".to_string()
-                        class="shadow-none".to_string()
-                    />
+                    {if values.is_empty() {
+                        view! {
+                            <div class="flex items-center justify-center h-[420px] text-gray-500">
+                                <div class="text-center">
+                                    <p class="text-lg font-semibold mb-2">"No hay datos para mostrar"</p>
+                                    <p class="text-sm">"Sube algunos tickets para ver tu evolución mensual"</p>
+                                </div>
+                            </div>
+                        }.into_view()
+                    } else {
+                        view! {
+                            <Chart
+                                id=format!("monthly-evolution-chart-{}-{}", months_filter, categories.len())
+                                chart_type=ChartType::Area
+                                series=series.clone()
+                                categories=categories.clone()
+                                height=420
+                                title="".to_string()
+                                class="shadow-none".to_string()
+                            />
+                        }.into_view()
+                    }}
                 </div>
             </div>
 

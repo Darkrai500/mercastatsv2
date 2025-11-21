@@ -112,6 +112,9 @@ pub fn Chart(
                 if let Some(window) = web_sys::window() {
                     if let Some(document) = window.document() {
                         if let Some(container) = document.get_element_by_id(&container_id_clone) {
+                            // Clear any existing content first
+                            container.set_inner_html("");
+
                             if let Ok(container_el) = container.dyn_into::<web_sys::HtmlElement>() {
                                 // Construir opciones del gráfico
                                 let mut options = json!({
@@ -161,23 +164,21 @@ pub fn Chart(
                                     "dataLabels": {
                                         "enabled": true,
                                         "style": {
-                                            "fontSize": "13px",
-                                            "fontWeight": 700,
-                                            "colors": ["#334155"]
+                                            "fontSize": "16px",
+                                            "fontWeight": 900,
+                                            "colors": ["#ffffff"]
                                         },
                                         "background": {
-                                            "enabled": true,
-                                            "foreColor": "#334155",
-                                            "padding": 6,
-                                            "borderRadius": 6,
-                                            "borderWidth": 1,
-                                            "borderColor": "#e2e8f0",
-                                            "opacity": 0.95,
-                                            "dropShadow": {
-                                                "enabled": false
-                                            }
+                                            "enabled": false
                                         },
-                                        "offsetY": -5
+                                        "offsetY": -15,
+                                        "dropShadow": {
+                                            "enabled": true,
+                                            "top": 1,
+                                            "left": 1,
+                                            "blur": 2,
+                                            "opacity": 0.3
+                                        }
                                     },
                                     "yaxis": {
                                         "decimalsInFloat": 2,
