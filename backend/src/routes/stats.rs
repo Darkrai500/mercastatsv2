@@ -3,27 +3,28 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::auth::AppState;
 use crate::{
     db::{
-        get_hourly_distribution, get_month_comparison, get_spending_trend,
+        get_hourly_distribution, get_month_comparison, get_monthly_spending, get_spending_trend,
         get_top_products_by_quantity, get_top_products_by_spending, get_user_stats,
         get_weekly_distribution,
     },
     error::AppResult,
     middleware::AuthenticatedUser,
-    schema::DashboardStatsResponse,
+    schema::{DashboardStatsResponse, MonthlyEvolutionResponse},
 };
 
 #[derive(Debug, Deserialize)]
 pub struct DashboardQueryParams {
-    /// Número de días a incluir en la tendencia (default: 30)
+    /// Number of days to include in the trend (default: 30)
     #[serde(default = "default_days")]
     pub days: i64,
 
-    /// Número de productos top a retornar (default: 5)
+    /// Limit for top products (default: 5)
     #[serde(default = "default_limit")]
     pub limit: i64,
 }
@@ -36,7 +37,18 @@ fn default_limit() -> i64 {
     5
 }
 
-/// Handler para obtener el dashboard completo de estadísticas
+#[derive(Debug, Deserialize)]
+pub struct MonthlyEvolutionQueryParams {
+    /// Months to retrieve (default 12, max 24)
+    #[serde(default = "default_months")]
+    pub months: i64,
+}
+
+fn default_months() -> i64 {
+    12
+}
+
+/// Handler: main dashboard stats
 pub async fn get_dashboard_stats(
     State(state): State<AppState>,
     auth_user: AuthenticatedUser,
@@ -45,15 +57,15 @@ pub async fn get_dashboard_stats(
     let user_email = auth_user.email;
 
     tracing::info!(
-        "Obteniendo dashboard de estadísticas para usuario: {}",
+        "Obteniendo dashboard de estadisticas para usuario: {}",
         user_email
     );
 
-    // Obtener datos en paralelo (simulado - se ejecutan secuencialmente pero podrían ser paralelos)
     let month_comparison = get_month_comparison(&state.db_pool, &user_email).await?;
     let user_stats = get_user_stats(&state.db_pool, &user_email).await?;
     let daily_trend = get_spending_trend(&state.db_pool, &user_email, params.days).await?;
-    let top_by_qty = get_top_products_by_quantity(&state.db_pool, &user_email, params.limit).await?;
+    let top_by_qty =
+        get_top_products_by_quantity(&state.db_pool, &user_email, params.limit).await?;
     let top_by_spending =
         get_top_products_by_spending(&state.db_pool, &user_email, params.limit).await?;
     let weekly_dist = get_weekly_distribution(&state.db_pool, &user_email).await?;
@@ -73,14 +85,73 @@ pub async fn get_dashboard_stats(
         hourly_distribution: hourly_dist,
     };
 
-    tracing::info!("Dashboard de estadísticas obtenido exitosamente");
+    tracing::info!("Dashboard de estadisticas obtenido exitosamente");
 
     Ok(Json(response))
 }
 
-/// Router para los endpoints de estadísticas
+/// Handler: monthly spend evolution time series
+pub async fn get_monthly_evolution(
+    State(state): State<AppState>,
+    auth_user: AuthenticatedUser,
+    Query(params): Query<MonthlyEvolutionQueryParams>,
+) -> AppResult<Json<MonthlyEvolutionResponse>> {
+    let user_email = auth_user.email;
+    let months = params.months.clamp(3, 24);
+
+    let months_data = get_monthly_spending(&state.db_pool, &user_email, months).await?;
+
+    let current_total = months_data
+        .last()
+        .map(|m| m.total)
+        .unwrap_or(Decimal::ZERO);
+    let previous_total = months_data
+        .iter()
+        .rev()
+        .nth(1)
+        .map(|m| m.total)
+        .unwrap_or(Decimal::ZERO);
+
+    let total_sum = months_data
+        .iter()
+        .fold(Decimal::ZERO, |acc, m| acc + m.total);
+    let average_monthly = if months_data.is_empty() {
+        Decimal::ZERO
+    } else {
+        total_sum / Decimal::from(months_data.len() as u64)
+    };
+
+    let month_over_month = if previous_total > Decimal::ZERO {
+        let diff = (current_total - previous_total) / previous_total * Decimal::new(100, 0);
+        diff.to_string().parse::<f64>().unwrap_or(0.0)
+    } else if current_total > Decimal::ZERO {
+        100.0
+    } else {
+        0.0
+    };
+
+    let current_year = chrono::Utc::now().format("%Y").to_string();
+    let year_to_date_total = months_data
+        .iter()
+        .filter(|m| m.month.starts_with(&current_year))
+        .fold(Decimal::ZERO, |acc, m| acc + m.total);
+
+    let response = MonthlyEvolutionResponse {
+        months: months_data,
+        current_month_total: current_total,
+        previous_month_total,
+        average_monthly,
+        year_to_date_total,
+        month_over_month,
+    };
+
+    Ok(Json(response))
+}
+
+/// Router para los endpoints de estadisticas
 pub fn stats_router(state: AppState) -> Router {
     Router::new()
         .route("/dashboard", get(get_dashboard_stats))
+        .route("/monthly", get(get_monthly_evolution))
         .with_state(state)
 }

@@ -1,7 +1,7 @@
 use crate::api::get_auth_token;
 use crate::components::sidebar::DashboardView;
 use crate::components::Sidebar;
-use crate::pages::{Stats, TicketHistory, Upload};
+use crate::pages::{MonthlyEvolution, Stats, TicketHistory, Upload};
 use leptos::*;
 use leptos_router::use_navigate;
 
@@ -49,6 +49,7 @@ pub fn Dashboard() -> impl IntoView {
                                     DashboardView::Upload => view! { <Upload /> }.into_view(),
                                     DashboardView::History => view! { <TicketHistory /> }.into_view(),
                                     DashboardView::Stats => view! { <Stats /> }.into_view(),
+                                    DashboardView::MonthlyEvolution => view! { <MonthlyEvolution /> }.into_view(),
                                 }}
                             </div>
                         }

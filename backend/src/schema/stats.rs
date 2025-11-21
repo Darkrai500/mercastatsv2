@@ -1,6 +1,4 @@
-use crate::db::{
-    DailySpendPoint, TimeDistributionPoint, TopProductItem,
-};
+use crate::db::{DailySpendPoint, MonthlySpendPoint, TimeDistributionPoint, TopProductItem};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -39,5 +37,16 @@ pub struct DashboardStatsResponse {
 
     /// Distribución de compras por hora del día
     pub hourly_distribution: Vec<TimeDistributionPoint>,
+}
+
+/// Serie y métricas para la evolución mensual de gasto
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonthlyEvolutionResponse {
+    pub months: Vec<MonthlySpendPoint>,
+    pub current_month_total: Decimal,
+    pub previous_month_total: Decimal,
+    pub average_monthly: Decimal,
+    pub year_to_date_total: Decimal,
+    pub month_over_month: f64,
 }
 
