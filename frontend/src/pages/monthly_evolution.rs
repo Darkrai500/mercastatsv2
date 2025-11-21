@@ -135,6 +135,7 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32) -> impl In
         .iter()
         .map(|m| {
             let val = parse_decimal(&m.total).unwrap_or(0.0);
+            // Round to 2 decimals
             (val * 100.0).round() / 100.0
         })
         .collect();
@@ -150,14 +151,12 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32) -> impl In
         .copied()
         .fold(f64::INFINITY, f64::min);
 
-    // Calculate moving average only on relevant (non-zero) months in All Time mode
-    let rolling = if months_filter == 999 {
-        // In All Time mode, calculate moving average only on the filtered (relevant) values
-        moving_average(&values, 3)
-    } else {
-        // In 6M/12M modes, use standard moving average
-        moving_average(&values, 3)
-    };
+    // Calculate moving average - always on the filtered values shown in the table
+    // Round each value to 2 decimals
+    let rolling: Vec<f64> = moving_average(&values, 3)
+        .iter()
+        .map(|&v| (v * 100.0).round() / 100.0)
+        .collect();
 
     let mut series = Vec::with_capacity(2);
     series.push(ChartSeriesData {

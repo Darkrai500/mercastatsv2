@@ -290,8 +290,34 @@ pub fn Chart(
                                     });
                                 }
 
-                                // Convertir JSON a JsValue usando into()
-                                if let Ok(options_js) = JsValue::from_serde(&options) {
+                                // Convertir JSON a JsValue
+                                if let Ok(mut options_js) = JsValue::from_serde(&options) {
+                                    // Add formatter functions via JavaScript evaluation
+                                    // This ensures numbers are displayed with max 2 decimals
+                                    if let Ok(options_obj) = js_sys::Reflect::get(&options_js, &JsValue::from_str("dataLabels")) {
+                                        let formatter_code = "(function(val) { return val != null ? val.toFixed(2) : ''; })";
+                                        if let Ok(formatter_fn) = js_sys::eval(formatter_code) {
+                                            let _ = js_sys::Reflect::set(&options_obj, &JsValue::from_str("formatter"), &formatter_fn);
+                                        }
+                                    }
+
+                                    // Add tooltip formatter
+                                    let tooltip_formatter_code = "(function(val) { return val != null ? '€' + val.toFixed(2) : ''; })";
+                                    if let Ok(formatter_fn) = js_sys::eval(tooltip_formatter_code) {
+                                        if let Ok(tooltip_obj) = js_sys::Reflect::get(&options_js, &JsValue::from_str("tooltip")) {
+                                            let y_obj = js_sys::Object::new();
+                                            let _ = js_sys::Reflect::set(&y_obj, &JsValue::from_str("formatter"), &formatter_fn);
+                                            let _ = js_sys::Reflect::set(&tooltip_obj, &JsValue::from_str("y"), &y_obj);
+                                        } else {
+                                            // Create tooltip object if it doesn't exist
+                                            let tooltip_obj = js_sys::Object::new();
+                                            let y_obj = js_sys::Object::new();
+                                            let _ = js_sys::Reflect::set(&y_obj, &JsValue::from_str("formatter"), &formatter_fn);
+                                            let _ = js_sys::Reflect::set(&tooltip_obj, &JsValue::from_str("y"), &y_obj);
+                                            let _ = js_sys::Reflect::set(&options_js, &JsValue::from_str("tooltip"), &tooltip_obj);
+                                        }
+                                    }
+
                                     let chart = ApexCharts::new(container_el, options_js);
                                     let _ = chart.render();
                                 }
