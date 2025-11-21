@@ -129,7 +129,7 @@ pub async fn get_top_products_by_spending(
 pub async fn get_monthly_spending(
     pool: &PgPool,
     usuario_email: &str,
-    months: i64,
+    months: i32,
 ) -> Result<Vec<MonthlySpendPoint>, sqlx::Error> {
     let months = months.clamp(1, 24);
 

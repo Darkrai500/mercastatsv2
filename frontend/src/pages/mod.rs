@@ -8,7 +8,6 @@ pub mod stats;
 pub mod upload;
 
 pub use dashboard::Dashboard;
-pub use example::ExamplePage;
 pub use history::TicketHistory;
 pub use monthly_evolution::MonthlyEvolution;
 pub use login::Login;

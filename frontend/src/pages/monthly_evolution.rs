@@ -7,7 +7,7 @@ pub fn MonthlyEvolution() -> impl IntoView {
     let (months_filter, set_months_filter) = create_signal(12u32);
     let monthly_data = create_resource(
         move || months_filter.get(),
-        |months| async {
+        |months| async move {
             get_monthly_evolution(months)
                 .await
                 .map_err(|e| {
@@ -224,12 +224,21 @@ fn MonthlyContent(data: MonthlyEvolutionResponse) -> impl IntoView {
                                             {format_month_label(&point.month)}
                                         </td>
                                         <td class="py-3 pr-4 text-sm text-gray-800 font-medium">
-                                            {format!("€{:,.2}", value)}
+                                            {format!("€{:.2}", value)}
                                         </td>
                                         <td class="py-3 pr-4 text-sm">
-                                            <span class=if delta >= 0.0 { "text-emerald-600 font-semibold" } else { "text-red-600 font-semibold" }>
-                                                {format!("{:+.1}%", delta)}
-                                            </span>
+                                            {
+                                                let class = if delta >= 0.0 {
+                                                    "text-emerald-600 font-semibold"
+                                                } else {
+                                                    "text-red-600 font-semibold"
+                                                };
+                                                view! {
+                                                    <span class=class>
+                                                        {format!("{:+.1}%", delta)}
+                                                    </span>
+                                                }
+                                            }
                                         </td>
                                         <td class="py-3 pr-4 text-sm text-gray-700 flex items-center gap-2">
                                             {point.ticket_count}

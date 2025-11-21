@@ -97,7 +97,7 @@ pub async fn get_monthly_evolution(
     Query(params): Query<MonthlyEvolutionQueryParams>,
 ) -> AppResult<Json<MonthlyEvolutionResponse>> {
     let user_email = auth_user.email;
-    let months = params.months.clamp(3, 24);
+    let months = params.months.clamp(3, 24) as i32;
 
     let months_data = get_monthly_spending(&state.db_pool, &user_email, months).await?;
 
@@ -139,7 +139,7 @@ pub async fn get_monthly_evolution(
     let response = MonthlyEvolutionResponse {
         months: months_data,
         current_month_total: current_total,
-        previous_month_total,
+        previous_month_total: previous_total,
         average_monthly,
         year_to_date_total,
         month_over_month,
