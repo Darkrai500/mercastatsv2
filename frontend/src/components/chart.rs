@@ -112,6 +112,9 @@ pub fn Chart(
                 if let Some(window) = web_sys::window() {
                     if let Some(document) = window.document() {
                         if let Some(container) = document.get_element_by_id(&container_id_clone) {
+                            // Clear any existing content first
+                            container.set_inner_html("");
+
                             if let Ok(container_el) = container.dyn_into::<web_sys::HtmlElement>() {
                                 // Construir opciones del gráfico
                                 let mut options = json!({
@@ -162,14 +165,50 @@ pub fn Chart(
                                         "enabled": true,
                                         "style": {
                                             "fontSize": "12px",
-                                            "fontWeight": 700,
+                                            "fontWeight": 900,
                                             "colors": ["#ffffff"]
                                         },
                                         "background": {
                                             "enabled": false
                                         },
-                                        "offsetX": 0,
-                                        "offsetY": 0
+                                        "offsetY": if chart_type_str_clone == "area" || chart_type_str_clone == "line" { 10.0 } else { 0.0 },
+                                        "dropShadow": {
+                                            "enabled": true,
+                                            "top": 1,
+                                            "left": 1,
+                                            "blur": 2,
+                                            "opacity": 0.3
+                                        }
+                                    },
+                                    "yaxis": {
+                                        "decimalsInFloat": 2,
+                                        "labels": {
+                                            "style": {
+                                                "fontSize": "12px",
+                                                "fontFamily": "Inter, sans-serif",
+                                                "colors": ["#64748b"]
+                                            }
+                                        }
+                                    },
+                                    "grid": {
+                                        "borderColor": "#f1f5f9",
+                                        "strokeDashArray": 4,
+                                        "xaxis": {
+                                            "lines": {
+                                                "show": true
+                                            }
+                                        },
+                                        "yaxis": {
+                                            "lines": {
+                                                "show": true
+                                            }
+                                        },
+                                        "padding": {
+                                            "top": 0,
+                                            "right": 20,
+                                            "bottom": 0,
+                                            "left": 20
+                                        }
                                     },
                                     "series": series_clone
                                         .iter()
@@ -251,8 +290,50 @@ pub fn Chart(
                                     });
                                 }
 
-                                // Convertir JSON a JsValue usando into()
-                                if let Ok(options_js) = JsValue::from_serde(&options) {
+                                // Convertir JSON a JsValue
+                                if let Ok(mut options_js) = JsValue::from_serde(&options) {
+                                    // Add formatter functions via JavaScript evaluation
+                                    // This ensures numbers are displayed with max 2 decimals
+                                    // Calculate max value for threshold logic
+                                    let max_val = series_clone.iter()
+                                        .flat_map(|s| s.data.iter())
+                                        .fold(0.0f64, |a, &b| a.max(b));
+
+                                    // Define threshold: 5% of max for Area/Line, 0 for others
+                                    let threshold = if chart_type_str_clone == "area" || chart_type_str_clone == "line" {
+                                        max_val * 0.05
+                                    } else {
+                                        0.0
+                                    };
+
+                                    if let Ok(options_obj) = js_sys::Reflect::get(&options_js, &JsValue::from_str("dataLabels")) {
+                                        // Only show label if value is greater than threshold
+                                        let formatter_code = format!(
+                                            "(function(val) {{ return (val != null && val > {:.4}) ? val.toFixed(2) : ''; }})",
+                                            threshold
+                                        );
+                                        if let Ok(formatter_fn) = js_sys::eval(&formatter_code) {
+                                            let _ = js_sys::Reflect::set(&options_obj, &JsValue::from_str("formatter"), &formatter_fn);
+                                        }
+                                    }
+
+                                    // Add tooltip formatter
+                                    let tooltip_formatter_code = "(function(val) { return val != null ? '€' + val.toFixed(2) : ''; })";
+                                    if let Ok(formatter_fn) = js_sys::eval(tooltip_formatter_code) {
+                                        if let Ok(tooltip_obj) = js_sys::Reflect::get(&options_js, &JsValue::from_str("tooltip")) {
+                                            let y_obj = js_sys::Object::new();
+                                            let _ = js_sys::Reflect::set(&y_obj, &JsValue::from_str("formatter"), &formatter_fn);
+                                            let _ = js_sys::Reflect::set(&tooltip_obj, &JsValue::from_str("y"), &y_obj);
+                                        } else {
+                                            // Create tooltip object if it doesn't exist
+                                            let tooltip_obj = js_sys::Object::new();
+                                            let y_obj = js_sys::Object::new();
+                                            let _ = js_sys::Reflect::set(&y_obj, &JsValue::from_str("formatter"), &formatter_fn);
+                                            let _ = js_sys::Reflect::set(&tooltip_obj, &JsValue::from_str("y"), &y_obj);
+                                            let _ = js_sys::Reflect::set(&options_js, &JsValue::from_str("tooltip"), &tooltip_obj);
+                                        }
+                                    }
+
                                     let chart = ApexCharts::new(container_el, options_js);
                                     let _ = chart.render();
                                 }

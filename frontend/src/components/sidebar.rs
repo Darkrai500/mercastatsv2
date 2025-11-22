@@ -5,6 +5,7 @@ pub enum DashboardView {
     Upload,
     History,
     Stats,
+    MonthlyEvolution,
 }
 
 #[component]
@@ -114,6 +115,31 @@ pub fn Sidebar(
                     </svg>
                     <span>"Estadísticas"</span>
                     {move || if current_view.get() == DashboardView::Stats {
+                        view! {
+                            <div class="ml-auto w-1.5 h-1.5 bg-primary-600 rounded-full"></div>
+                        }.into_view()
+                    } else {
+                        view! {}.into_view()
+                    }}
+                </button>
+
+                // Opción: Evolución mensual
+                <button
+                    class=move || {
+                        let base = "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all";
+                        if current_view.get() == DashboardView::MonthlyEvolution {
+                            format!("{} bg-primary-50 text-primary-700", base)
+                        } else {
+                            format!("{} text-gray-700 hover:bg-gray-100 hover:text-gray-900", base)
+                        }
+                    }
+                    on:click=move |_| on_view_change.call(DashboardView::MonthlyEvolution)
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8"></path>
+                    </svg>
+                    <span>"Evolución mensual"</span>
+                    {move || if current_view.get() == DashboardView::MonthlyEvolution {
                         view! {
                             <div class="ml-auto w-1.5 h-1.5 bg-primary-600 rounded-full"></div>
                         }.into_view()

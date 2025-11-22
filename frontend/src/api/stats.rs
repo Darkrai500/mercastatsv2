@@ -90,3 +90,54 @@ pub async fn get_dashboard_stats() -> Result<DashboardStatsResponse, String> {
     }
 }
 
+/// Punto mensual de gasto
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonthlySpendPoint {
+    pub month: String,
+    pub total: String,
+    pub ticket_count: i64,
+}
+
+/// Respuesta para la evolución mensual de gasto
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonthlyEvolutionResponse {
+    pub months: Vec<MonthlySpendPoint>,
+    pub current_month_total: String,
+    pub previous_month_total: String,
+    pub average_monthly: String,
+    pub year_to_date_total: String,
+    pub month_over_month: f64,
+}
+
+/// Obtener la evolución mensual del gasto
+pub async fn get_monthly_evolution(months: u32) -> Result<MonthlyEvolutionResponse, String> {
+    let token = get_auth_token().ok_or_else(|| "No hay sesion activa".to_string())?;
+    let url = format!("{}/stats/monthly?months={}", API_BASE_URL, months);
+
+    let response = Request::get(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Error de conexion: {}", e))?;
+
+    if response.ok() {
+        response
+            .json::<MonthlyEvolutionResponse>()
+            .await
+            .map_err(|e| format!("Error al procesar respuesta: {}", e))
+    } else {
+        let status = response.status();
+        let error = response
+            .json::<ApiError>()
+            .await
+            .map(|e| e.error)
+            .unwrap_or_else(|_| {
+                format!(
+                    "Error {}: No se pudo obtener la evolucion mensual",
+                    status
+                )
+            });
+        Err(error)
+    }
+}
+

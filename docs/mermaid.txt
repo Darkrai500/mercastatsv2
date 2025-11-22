@@ -1,0 +1,156 @@
+erDiagram
+    USUARIOS ||--o{ COMPRAS : "realiza"
+    USUARIOS ||--o{ OBJETIVOS_AHORRO : "tiene"
+    USUARIOS ||--o{ LOGROS_USUARIO : "obtiene"
+    USUARIOS ||--o{ PREFERENCIAS_USUARIO : "configura"
+    
+    CATEGORIAS ||--o{ PRODUCTOS : "clasifica"
+    
+    PRODUCTOS ||--o{ COMPRAS_PRODUCTOS : "aparece_en"
+    PRODUCTOS ||--o{ HISTORICO_PRECIOS : "tiene_historial"
+    PRODUCTOS ||--o{ PRODUCTOS_TAGS : "tiene"
+    PRODUCTOS ||--o{ PRODUCTOS_ALTERNATIVOS : "tiene_alternativas"
+    PRODUCTOS ||--o{ PRODUCTOS_ALTERNATIVOS : "es_alternativa_de"
+    
+    COMPRAS ||--|| TICKETS_PDF : "tiene"
+    COMPRAS ||--o{ COMPRAS_PRODUCTOS : "contiene"
+    
+    TAGS ||--o{ PRODUCTOS_TAGS : "clasifica"
+    
+    LOGROS ||--o{ LOGROS_USUARIO : "se_otorga"
+    
+    USUARIOS {
+        varchar email PK
+        varchar password_hash
+        varchar nombre
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    CATEGORIAS {
+        serial id PK
+        varchar nombre UK
+        text descripcion
+        varchar icono
+        timestamp created_at
+    }
+    
+    PRODUCTOS {
+        varchar nombre PK
+        int categoria_id FK
+        varchar marca
+        varchar unidad
+        numeric precio_actual
+        timestamp precio_actualizado_en
+        timestamp created_at
+    }
+    
+    HISTORICO_PRECIOS {
+        varchar producto_nombre PK
+        date fecha_vigencia PK
+        numeric precio
+        varchar fuente
+        timestamp created_at
+    }
+    
+    COMPRAS {
+        varchar numero_factura PK
+        varchar usuario_email FK
+        timestamp fecha_hora
+        numeric total
+        varchar tienda
+        varchar ubicacion
+        varchar metodo_pago
+        varchar numero_operacion
+        timestamp created_at
+    }
+    
+    TICKETS_PDF {
+        varchar numero_factura PK
+        bytea ticket_pdf
+        varchar ticket_nombre_archivo
+        int ticket_tamano_bytes
+        timestamp created_at
+    }
+    
+    COMPRAS_PRODUCTOS {
+        varchar compra_numero_factura PK
+        varchar producto_nombre PK
+        numeric cantidad
+        numeric precio_unitario
+        numeric precio_total
+        numeric descuento
+        numeric iva_porcentaje
+        numeric iva_importe
+    }
+    
+    TAGS {
+        serial id PK
+        varchar nombre UK
+        varchar descripcion
+        varchar color
+        timestamp created_at
+    }
+    
+    PRODUCTOS_TAGS {
+        varchar producto_nombre PK
+        int tag_id PK
+        timestamp asignado_en
+    }
+    
+    SOSTENIBILIDAD_PRODUCTO {
+        varchar producto_nombre PK
+        boolean envase_reciclable
+        varchar tipo_material
+        numeric huella_carbono
+        boolean comercio_justo
+        boolean produccion_local
+        text certificaciones
+        timestamp actualizado_en
+    }
+    
+    PRODUCTOS_ALTERNATIVOS {
+        varchar producto_principal_nombre PK
+        varchar producto_alternativo_nombre PK
+        varchar razon
+        numeric diferencia_precio
+        timestamp sugerido_en
+    }
+    
+    OBJETIVOS_AHORRO {
+        serial id PK
+        varchar usuario_email FK
+        numeric objetivo_mensual
+        date mes
+        boolean conseguido
+        numeric ahorro_real
+        timestamp created_at
+    }
+    
+    LOGROS {
+        serial id PK
+        varchar codigo UK
+        varchar nombre
+        text descripcion
+        varchar icono
+        text condicion_sql
+        timestamp created_at
+    }
+    
+    LOGROS_USUARIO {
+        varchar usuario_email PK
+        int logro_id PK
+        timestamp desbloqueado_en
+        json metadata
+    }
+    
+    PREFERENCIAS_USUARIO {
+        varchar usuario_email PK
+        boolean alertas_gasto_activas
+        numeric umbral_alerta_gasto
+        boolean notif_nuevos_logros
+        boolean notif_inflacion
+        varchar frecuencia_reportes
+        json configuracion_extra
+        timestamp updated_at
+    }
