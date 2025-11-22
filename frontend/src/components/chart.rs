@@ -164,14 +164,14 @@ pub fn Chart(
                                     "dataLabels": {
                                         "enabled": true,
                                         "style": {
-                                            "fontSize": "16px",
+                                            "fontSize": "12px",
                                             "fontWeight": 900,
                                             "colors": ["#ffffff"]
                                         },
                                         "background": {
                                             "enabled": false
                                         },
-                                        "offsetY": -15,
+                                        "offsetY": if chart_type_str_clone == "area" || chart_type_str_clone == "line" { 10.0 } else { 0.0 },
                                         "dropShadow": {
                                             "enabled": true,
                                             "top": 1,
@@ -294,9 +294,25 @@ pub fn Chart(
                                 if let Ok(mut options_js) = JsValue::from_serde(&options) {
                                     // Add formatter functions via JavaScript evaluation
                                     // This ensures numbers are displayed with max 2 decimals
+                                    // Calculate max value for threshold logic
+                                    let max_val = series_clone.iter()
+                                        .flat_map(|s| s.data.iter())
+                                        .fold(0.0f64, |a, &b| a.max(b));
+
+                                    // Define threshold: 5% of max for Area/Line, 0 for others
+                                    let threshold = if chart_type_str_clone == "area" || chart_type_str_clone == "line" {
+                                        max_val * 0.05
+                                    } else {
+                                        0.0
+                                    };
+
                                     if let Ok(options_obj) = js_sys::Reflect::get(&options_js, &JsValue::from_str("dataLabels")) {
-                                        let formatter_code = "(function(val) { return val != null ? val.toFixed(2) : ''; })";
-                                        if let Ok(formatter_fn) = js_sys::eval(formatter_code) {
+                                        // Only show label if value is greater than threshold
+                                        let formatter_code = format!(
+                                            "(function(val) {{ return (val != null && val > {:.4}) ? val.toFixed(2) : ''; }})",
+                                            threshold
+                                        );
+                                        if let Ok(formatter_fn) = js_sys::eval(&formatter_code) {
                                             let _ = js_sys::Reflect::set(&options_obj, &JsValue::from_str("formatter"), &formatter_fn);
                                         }
                                     }
