@@ -168,9 +168,21 @@ pub fn Upload() -> impl IntoView {
                 files.remove(index);
             }
         });
+        // Remove from processing batch if it was part of it
+        set_processing_batch.update(|batch| {
+            batch.remove(&id);
+        });
     };
 
     let clear_completed = move |_| {
+        // Collect IDs of completed files before removing them
+        let completed_ids: Vec<String> = files.with(|files| {
+            files.iter()
+                .filter(|f| f.status == UploadStatus::Success)
+                .map(|f| f.id.clone())
+                .collect()
+        });
+        
         set_files.update(|files| {
             files.retain(|f| {
                 if f.status == UploadStatus::Success {
@@ -182,6 +194,13 @@ pub fn Upload() -> impl IntoView {
                     true
                 }
             });
+        });
+        
+        // Remove completed files from processing batch
+        set_processing_batch.update(|batch| {
+            for id in completed_ids {
+                batch.remove(&id);
+            }
         });
     };
 
