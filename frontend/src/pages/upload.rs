@@ -1,6 +1,7 @@
 use crate::api::tickets::{process_ticket_ocr, ProcessTicketResponse};
 use crate::components::{Button, ButtonVariant, Card};
 use leptos::*;
+use std::collections::HashSet;
 use web_sys::{File, HtmlInputElement};
 
 #[derive(Clone, PartialEq)]
@@ -25,6 +26,7 @@ struct FileStatus {
 pub fn Upload() -> impl IntoView {
     let (files, set_files) = create_signal(Vec::<FileStatus>::new());
     let (processing, set_processing) = create_signal(false);
+    let (processing_batch, set_processing_batch) = create_signal(HashSet::<String>::new());
     let (_user_email, set_user_email) = create_signal(None::<String>);
 
     // Obtener email del usuario de localStorage
@@ -39,6 +41,28 @@ pub fn Upload() -> impl IntoView {
     });
 
     let file_input_ref = create_node_ref::<html::Input>();
+
+    // Helper to check if batch is complete and reset processing state
+    let check_and_reset_batch = move || {
+        let batch_complete = files.with(|files| {
+            processing_batch.with(|batch_ids| {
+                if batch_ids.is_empty() {
+                    return true;
+                }
+                batch_ids.iter().all(|batch_id| {
+                    files.iter()
+                        .find(|f| &f.id == batch_id)
+                        .map(|f| f.status == UploadStatus::Success || f.status == UploadStatus::Error)
+                        .unwrap_or(true) // If file was removed, consider it done
+                })
+            })
+        });
+        
+        if batch_complete {
+            set_processing.set(false);
+            set_processing_batch.set(HashSet::new());
+        }
+    };
 
     let handle_file_select = move |ev: web_sys::Event| {
         let target = event_target::<HtmlInputElement>(&ev);
@@ -114,13 +138,8 @@ pub fn Upload() -> impl IntoView {
                 }
             }
             
-            // Check if all files are done to stop global processing state
-            files.with(|files| {
-                let all_done = files.iter().all(|f| f.status == UploadStatus::Success || f.status == UploadStatus::Error);
-                if all_done {
-                    set_processing.set(false);
-                }
-            });
+            // Check if batch is complete and reset processing state
+            check_and_reset_batch();
         });
     };
 
@@ -134,6 +153,12 @@ pub fn Upload() -> impl IntoView {
             return;
         }
 
+        // Capture IDs of files in this batch
+        let batch_ids: HashSet<String> = pending_files.iter()
+            .map(|f| f.id.clone())
+            .collect();
+        
+        set_processing_batch.set(batch_ids);
         set_processing.set(true);
         
         for file in pending_files {
@@ -151,9 +176,23 @@ pub fn Upload() -> impl IntoView {
                 files.remove(index);
             }
         });
+        
+        // Remove from processing batch and check if batch is now complete
+        set_processing_batch.update(|batch| {
+            batch.remove(&id);
+        });
+        check_and_reset_batch();
     };
 
     let clear_completed = move |_| {
+        // Collect IDs of completed files before removing them
+        let completed_ids: Vec<String> = files.with(|files| {
+            files.iter()
+                .filter(|f| f.status == UploadStatus::Success)
+                .map(|f| f.id.clone())
+                .collect()
+        });
+        
         set_files.update(|files| {
             files.retain(|f| {
                 if f.status == UploadStatus::Success {
@@ -166,6 +205,14 @@ pub fn Upload() -> impl IntoView {
                 }
             });
         });
+        
+        // Remove completed files from processing batch and check if batch is now complete
+        set_processing_batch.update(|batch| {
+            for id in completed_ids {
+                batch.remove(&id);
+            }
+        });
+        check_and_reset_batch();
     };
 
     let trigger_file_input = move |_| {
