@@ -1,143 +1,148 @@
 <!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Mercastats - Analiza tus compras de Mercadona" />
-    <title>Mercastats - Análisis de compras</title>
 
-    <!-- Tailwind CSS via CDN (temporal, luego usaremos build) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Mercastats - Analiza tus compras de Mercadona" />
+  <title>Mercastats - Análisis de compras</title>
+  <link data-trunk rel="copy-file" href="public/favicon.ico" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
 
-    <!-- ApexCharts Library -->
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts@latest/dist/apexcharts.min.js"></script>
+  <!-- Tailwind CSS via CDN (temporal, luego usaremos build) -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Tailwind config inline -->
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: {
-                50: '#f0f9ff',
-                100: '#e0f2fe',
-                200: '#bae6fd',
-                300: '#7dd3fc',
-                400: '#38bdf8',
-                500: '#0ea5e9',
-                600: '#0284c7',
-                700: '#0369a1',
-                800: '#075985',
-                900: '#0c4a6e',
-              },
-              accent: {
-                50: '#fdf4ff',
-                100: '#fae8ff',
-                200: '#f5d0fe',
-                300: '#f0abfc',
-                400: '#e879f9',
-                500: '#d946ef',
-                600: '#c026d3',
-                700: '#a21caf',
-                800: '#86198f',
-                900: '#701a75',
-              }
+  <!-- ApexCharts Library -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts@latest/dist/apexcharts.min.js"></script>
+
+  <!-- Tailwind config inline -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
             },
-            fontFamily: {
-              sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            accent: {
+              50: '#fdf4ff',
+              100: '#fae8ff',
+              200: '#f5d0fe',
+              300: '#f0abfc',
+              400: '#e879f9',
+              500: '#d946ef',
+              600: '#c026d3',
+              700: '#a21caf',
+              800: '#86198f',
+              900: '#701a75',
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-in-out',
+            'slide-up': 'slideUp 0.4s ease-out',
+            'slide-down': 'slideDown 0.4s ease-out',
+            'scale-in': 'scaleIn 0.3s ease-out',
+            'pulse-glow': 'pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          transitionDelay: {
+            0: '0ms',
+            100: '100ms',
+            200: '200ms',
+            300: '300ms',
+            400: '400ms',
+            500: '500ms',
+          },
+          animationDelay: {
+            0: '0ms',
+            100: '100ms',
+            200: '200ms',
+            300: '300ms',
+            400: '400ms',
+            500: '500ms',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
             },
-            animation: {
-              'fade-in': 'fadeIn 0.5s ease-in-out',
-              'slide-up': 'slideUp 0.4s ease-out',
-              'slide-down': 'slideDown 0.4s ease-out',
-              'scale-in': 'scaleIn 0.3s ease-out',
-              'pulse-glow': 'pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            slideUp: {
+              '0%': { transform: 'translateY(20px)', opacity: '0' },
+              '100%': { transform: 'translateY(0)', opacity: '1' },
             },
-            transitionDelay: {
-              0: '0ms',
-              100: '100ms',
-              200: '200ms',
-              300: '300ms',
-              400: '400ms',
-              500: '500ms',
+            slideDown: {
+              '0%': { transform: 'translateY(-20px)', opacity: '0' },
+              '100%': { transform: 'translateY(0)', opacity: '1' },
             },
-            animationDelay: {
-              0: '0ms',
-              100: '100ms',
-              200: '200ms',
-              300: '300ms',
-              400: '400ms',
-              500: '500ms',
+            scaleIn: {
+              '0%': { transform: 'scale(0.95)', opacity: '0' },
+              '100%': { transform: 'scale(1)', opacity: '1' },
             },
-            keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              slideUp: {
-                '0%': { transform: 'translateY(20px)', opacity: '0' },
-                '100%': { transform: 'translateY(0)', opacity: '1' },
-              },
-              slideDown: {
-                '0%': { transform: 'translateY(-20px)', opacity: '0' },
-                '100%': { transform: 'translateY(0)', opacity: '1' },
-              },
-              scaleIn: {
-                '0%': { transform: 'scale(0.95)', opacity: '0' },
-                '100%': { transform: 'scale(1)', opacity: '1' },
-              },
-              pulseGlow: {
-                '0%, 100%': { opacity: '1' },
-                '50%': { opacity: '0.5' },
-              }
+            pulseGlow: {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '0.5' },
             }
           }
         }
       }
-    </script>
+    }
+  </script>
 
-    <!-- Custom styles -->
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
+  <!-- Custom styles -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
 
-      /* Scrollbar personalizado (estilo minimalista) */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
+    /* Scrollbar personalizado (estilo minimalista) */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
 
-      ::-webkit-scrollbar-track {
-        background: #f1f5f9;
-      }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
 
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
-      }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
 
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-      }
-    </style>
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
 
-    <link data-trunk rel="rust" data-wasm-opt="z" />
-  </head>
-  <body class="bg-gray-50 text-gray-900">
-    <noscript>
-      <div style="padding: 2rem; text-align: center; background: #fee; color: #c00;">
-        <h1>JavaScript requerido</h1>
-        <p>Esta aplicación requiere JavaScript habilitado para funcionar.</p>
-      </div>
-    </noscript>
-  </body>
+  <link data-trunk rel="rust" data-wasm-opt="z" />
+</head>
+
+<body class="bg-gray-50 text-gray-900">
+  <noscript>
+    <div style="padding: 2rem; text-align: center; background: #fee; color: #c00;">
+      <h1>JavaScript requerido</h1>
+      <p>Esta aplicación requiere JavaScript habilitado para funcionar.</p>
+    </div>
+  </noscript>
+</body>
+
 </html>
