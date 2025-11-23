@@ -28,7 +28,7 @@ pub struct ProcessTicketRequest {
     pub usuario_email: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TicketProduct {
     pub nombre: String,
     pub cantidad: f64,
@@ -43,14 +43,14 @@ pub struct TicketProduct {
     pub iva_importe: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IvaBreakdown {
     pub porcentaje: f64,
     pub base_imponible: f64,
     pub cuota: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OcrResponseSummary {
     pub ticket_id: String,
     pub numero_factura: Option<String>,
@@ -59,7 +59,7 @@ pub struct OcrResponseSummary {
     pub productos_detectados: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TicketIngestionResponse {
     pub ingested: bool,
     pub numero_factura: String,
@@ -68,7 +68,7 @@ pub struct TicketIngestionResponse {
     pub fecha_hora: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProcessTicketResponse {
     pub ocr: OcrResponseSummary,
     pub ingestion: Option<TicketIngestionResponse>,

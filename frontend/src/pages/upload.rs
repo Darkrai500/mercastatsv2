@@ -3,14 +3,28 @@ use crate::components::{Button, ButtonVariant, Card};
 use leptos::*;
 use web_sys::{File, HtmlInputElement};
 
+#[derive(Clone, PartialEq)]
+enum UploadStatus {
+    Pending,
+    Processing,
+    Success,
+    Error,
+}
+
+#[derive(Clone, PartialEq)]
+struct FileStatus {
+    id: String,
+    file: File,
+    status: UploadStatus,
+    result: Option<ProcessTicketResponse>,
+    error: Option<String>,
+    preview_url: Option<String>,
+}
+
 #[component]
 pub fn Upload() -> impl IntoView {
-    let (selected_file, set_selected_file) = create_signal(None::<File>);
-    let (preview_url, set_preview_url) = create_signal(None::<String>);
+    let (files, set_files) = create_signal(Vec::<FileStatus>::new());
     let (processing, set_processing) = create_signal(false);
-    let (success_message, set_success_message) = create_signal(None::<String>);
-    let (error_message, set_error_message) = create_signal(None::<String>);
-    let (ocr_result, set_ocr_result) = create_signal(None::<ProcessTicketResponse>);
     let (_user_email, set_user_email) = create_signal(None::<String>);
 
     // Obtener email del usuario de localStorage
@@ -28,89 +42,130 @@ pub fn Upload() -> impl IntoView {
 
     let handle_file_select = move |ev: web_sys::Event| {
         let target = event_target::<HtmlInputElement>(&ev);
-        if let Some(files) = target.files() {
-            if let Some(file) = files.get(0) {
-                set_selected_file.set(Some(file.clone()));
-                set_error_message.set(None);
-                set_success_message.set(None);
-
-                // Crear preview para imágenes
-                let file_type = file.type_();
-                if file_type.starts_with("image/") {
-                    spawn_local(async move {
+        if let Some(file_list) = target.files() {
+            let mut new_files = Vec::new();
+            for i in 0..file_list.length() {
+                if let Some(file) = file_list.get(i) {
+                    let id = format!("{}-{}", file.name(), js_sys::Date::now());
+                    
+                    // Crear preview para imágenes
+                    let mut preview_url = None;
+                    let file_type = file.type_();
+                    if file_type.starts_with("image/") {
                         if let Ok(url) = create_object_url(&file) {
-                            if let Some(prev) = preview_url.get_untracked() {
-                                let _ = web_sys::Url::revoke_object_url(&prev);
-                            }
-                            set_preview_url.set(Some(url));
+                            preview_url = Some(url);
                         }
-                    });
-                } else {
-                    if let Some(prev) = preview_url.get_untracked() {
-                        let _ = web_sys::Url::revoke_object_url(&prev);
                     }
-                    set_preview_url.set(None);
+
+                    new_files.push(FileStatus {
+                        id,
+                        file,
+                        status: UploadStatus::Pending,
+                        result: None,
+                        error: None,
+                        preview_url,
+                    });
                 }
+            }
+            
+            set_files.update(|current| current.extend(new_files));
+            
+            // Reset input so same files can be selected again if needed
+            if let Some(input) = file_input_ref.get() {
+                input.set_value("");
             }
         }
     };
 
-    let handle_process_click = move |_: leptos::ev::MouseEvent| {
-        if let Some(file) = selected_file.get() {
-            set_processing.set(true);
-            set_error_message.set(None);
-            set_success_message.set(None);
-            set_ocr_result.set(None);
-
-            spawn_local(async move {
-                match process_ticket_ocr(file).await {
-                    Ok(response) => {
-                        let invoice = response.ocr.numero_factura.clone().unwrap_or_default();
-                        let total = response.ocr.total.unwrap_or(0.0);
-                        let products_count = response.ocr.productos_detectados;
-
-                        // Verificar si la ingesta fue exitosa
-                        let message = if let Some(ingestion) = &response.ingestion {
-                            format!(
-                                "¡Ticket guardado con éxito! Factura: {} | Total: {:.2}€ | {} productos guardados",
-                                ingestion.numero_factura, total, ingestion.productos_insertados
-                            )
-                        } else {
-                            format!(
-                                "Ticket procesado (OCR): {} | Total: {:.2}€ | {} productos detectados (no guardado)",
-                                invoice, total, products_count
-                            )
-                        };
-
-                        set_success_message.set(Some(message));
-                        set_ocr_result.set(Some(response));
-                        set_processing.set(false);
-                        set_selected_file.set(None);
-                        if let Some(prev) = preview_url.get_untracked() {
-                            let _ = web_sys::Url::revoke_object_url(&prev);
-                        }
-                        set_preview_url.set(None);
-
-                        // Reset file input
-                        if let Some(input) = file_input_ref.get() {
-                            input.set_value("");
-                        }
-                    }
-                    Err(err) => {
-                        // Detectar errores específicos de duplicado
-                        if err.contains("ya existe") || err.contains("Conflict") {
-                            set_error_message.set(Some(format!(
-                                "⚠️ Este ticket ya ha sido subido anteriormente. {}",
-                                err
-                            )));
-                        } else {
-                            set_error_message.set(Some(err));
-                        }
-                        set_processing.set(false);
-                    }
+    let process_file = move |file_status: FileStatus| {
+        let id = file_status.id.clone();
+        
+        spawn_local(async move {
+            // Update status to processing
+            set_files.update(|files| {
+                if let Some(f) = files.iter_mut().find(|f| f.id == id) {
+                    f.status = UploadStatus::Processing;
+                    f.error = None;
                 }
             });
+
+            match process_ticket_ocr(file_status.file).await {
+                Ok(response) => {
+                    set_files.update(|files| {
+                        if let Some(f) = files.iter_mut().find(|f| f.id == id) {
+                            f.status = UploadStatus::Success;
+                            f.result = Some(response);
+                        }
+                    });
+                }
+                Err(err) => {
+                    let error_msg = if err.contains("ya existe") || err.contains("Conflict") {
+                        format!("⚠️ Duplicado: {}", err)
+                    } else {
+                        err
+                    };
+                    
+                    set_files.update(|files| {
+                        if let Some(f) = files.iter_mut().find(|f| f.id == id) {
+                            f.status = UploadStatus::Error;
+                            f.error = Some(error_msg);
+                        }
+                    });
+                }
+            }
+            
+            // Check if all files are done to stop global processing state
+            files.with(|files| {
+                let all_done = files.iter().all(|f| f.status == UploadStatus::Success || f.status == UploadStatus::Error);
+                if all_done {
+                    set_processing.set(false);
+                }
+            });
+        });
+    };
+
+    let handle_process_all = move |_| {
+        let pending_files: Vec<FileStatus> = files.get()
+            .into_iter()
+            .filter(|f| f.status == UploadStatus::Pending || f.status == UploadStatus::Error)
+            .collect();
+            
+        if pending_files.is_empty() {
+            return;
         }
+
+        set_processing.set(true);
+        
+        for file in pending_files {
+            process_file(file);
+        }
+    };
+
+    let remove_file = move |id: String| {
+        set_files.update(|files| {
+            if let Some(index) = files.iter().position(|f| f.id == id) {
+                let file = &files[index];
+                if let Some(url) = &file.preview_url {
+                    let _ = web_sys::Url::revoke_object_url(url);
+                }
+                files.remove(index);
+            }
+        });
+    };
+
+    let clear_completed = move |_| {
+        set_files.update(|files| {
+            files.retain(|f| {
+                if f.status == UploadStatus::Success {
+                    if let Some(url) = &f.preview_url {
+                        let _ = web_sys::Url::revoke_object_url(url);
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
+        });
     };
 
     let trigger_file_input = move |_| {
@@ -119,24 +174,15 @@ pub fn Upload() -> impl IntoView {
         }
     };
 
-    let handle_cancel = move |_| {
-        set_selected_file.set(None);
-        set_success_message.set(None);
-        set_error_message.set(None);
-        if let Some(prev) = preview_url.get_untracked() {
-            let _ = web_sys::Url::revoke_object_url(&prev);
-        }
-        set_preview_url.set(None);
-
-        if let Some(input) = file_input_ref.get() {
-            input.set_value("");
-        }
-    };
-
     on_cleanup(move || {
-        if let Some(prev) = preview_url.get_untracked() {
-            let _ = web_sys::Url::revoke_object_url(&prev);
-        }
+        // Cleanup all object URLs
+        files.with(|files| {
+            for file in files {
+                if let Some(url) = &file.preview_url {
+                    let _ = web_sys::Url::revoke_object_url(url);
+                }
+            }
+        });
     });
 
     view! {
@@ -144,147 +190,200 @@ pub fn Upload() -> impl IntoView {
             // Header
             <div>
                 <h1 class="text-3xl font-bold text-gray-900 mb-2">
-                    "Sube tu ticket de Mercadona"
+                    "Sube tus tickets de Mercadona"
                 </h1>
                 <p class="text-gray-600">
-                    "Analiza tus compras y descubre patrones de consumo"
+                    "Analiza tus compras y descubre patrones de consumo. Puedes subir múltiples archivos a la vez."
                 </p>
             </div>
-
-            // Messages
-            {move || success_message.get().map(|msg| view! {
-                <div class="p-4 bg-green-50 border border-green-200 rounded-xl animate-slide-up">
-                    <div class="flex items-center">
-                        <svg class="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <p class="text-green-800 font-medium">{msg}</p>
-                    </div>
-                </div>
-            })}
-
-            {move || error_message.get().map(|msg| view! {
-                <div class="p-4 bg-red-50 border border-red-200 rounded-xl animate-slide-up">
-                    <div class="flex items-center">
-                        <svg class="w-6 h-6 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <p class="text-red-800 font-medium">{msg}</p>
-                    </div>
-                </div>
-            })}
 
             // Upload card
             <Card class="animate-slide-up".to_string()>
                 <div class="space-y-6">
                     // Drop zone
                     <div
-                            class="relative border-3 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-primary-400 transition-colors cursor-pointer group"
-                            on:click=trigger_file_input
-                        >
-                            <input
-                                node_ref=file_input_ref
-                                type="file"
-                                accept="image/*,.pdf"
-                                class="hidden"
-                                on:change=handle_file_select
-                            />
+                        class="relative border-3 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-primary-400 transition-colors cursor-pointer group"
+                        on:click=trigger_file_input
+                    >
+                        <input
+                            node_ref=file_input_ref
+                            type="file"
+                            accept="image/*,.pdf"
+                            class="hidden"
+                            multiple=true
+                            on:change=handle_file_select
+                        />
 
-                            {move || if let Some(_) = selected_file.get() {
-                                view! {
-                                    <div class="space-y-4">
-                                        {move || preview_url.get().map(|url| view! {
-                                            <img
-                                                src={url}
-                                                alt="Preview"
-                                                class="max-h-64 mx-auto rounded-lg shadow-md"
-                                            />
-                                        })}
-                                        <div class="flex items-center justify-center text-green-600">
-                                            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <p class="text-lg font-semibold text-gray-900">
-                                                {move || selected_file.get().map(|f| f.name()).unwrap_or_default()}
-                                            </p>
-                                            <p class="text-sm text-gray-500">
-                                                {move || {
-                                                    selected_file.get().map(|f| {
-                                                        let size = f.size() as f64;
-                                                        if size < 1024.0 {
-                                                            format!("{:.0} B", size)
-                                                        } else if size < 1024.0 * 1024.0 {
-                                                            format!("{:.1} KB", size / 1024.0)
-                                                        } else {
-                                                            format!("{:.1} MB", size / (1024.0 * 1024.0))
-                                                        }
-                                                    }).unwrap_or_default()
-                                                }}
-                                            </p>
-                                        </div>
-                                        <p class="text-sm text-gray-600">
-                                            "Haz clic para cambiar el archivo"
-                                        </p>
-                                    </div>
-                                }.into_view()
-                            } else {
-                                view! {
-                                    <div class="space-y-4">
-                                        <div class="flex justify-center">
-                                            <div class="w-24 h-24 bg-primary-100 rounded-full flex items-center justify-center group-hover:bg-primary-200 transition-colors">
-                                                <svg class="w-12 h-12 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p class="text-lg font-semibold text-gray-900 mb-2">
-                                                "Arrastra tu ticket aquí o haz clic para seleccionar"
-                                            </p>
-                                            <p class="text-sm text-gray-600">
-                                                "Soportamos PDF e imágenes (JPG, PNG)"
-                                            </p>
-                                            <p class="text-xs text-gray-500 mt-2">
-                                                "Tamaño máximo: 10MB"
-                                            </p>
-                                        </div>
-                                    </div>
-                                }.into_view()
-                            }}
+                        <div class="space-y-4">
+                            <div class="flex justify-center">
+                                <div class="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                                    <svg class="w-10 h-10 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-lg font-semibold text-gray-900 mb-2">
+                                    "Arrastra tus tickets aquí o haz clic para seleccionar"
+                                </p>
+                                <p class="text-sm text-gray-600">
+                                    "Soportamos PDF e imágenes (JPG, PNG)"
+                                </p>
+                            </div>
                         </div>
-
-                        // Action buttons
-                        <div class="flex gap-4">
-                            {move || if selected_file.get().is_some() {
-                                view! {
-                                    <>
-                                        <Button
-                                            full_width=true
-                                            loading=processing.get()
-                                            disabled=processing.get()
-                                            on:click=handle_process_click
-                                        >
-                                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                            </svg>
-                                            {move || if processing.get() { "Procesando..." } else { "Procesar ticket" }}
-                                        </Button>
-                                        <Button
-                                            variant=ButtonVariant::Outline
-                                            on:click=handle_cancel
-                                        >
-                                            "Cancelar"
-                                        </Button>
-                                    </>
-                                }.into_view()
-                            } else {
-                                view! { <div></div> }.into_view()
-                            }}
-                        </div>
-
                     </div>
+
+                    // File List
+                    {move || if !files.get().is_empty() {
+                        view! {
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <h3 class="font-medium text-gray-900">"Archivos seleccionados (" {move || files.get().len()} ")"</h3>
+                                    {move || {
+                                        let has_success = files.get().iter().any(|f| f.status == UploadStatus::Success);
+                                        if has_success {
+                                            view! {
+                                                <button 
+                                                    class="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                                                    on:click=clear_completed
+                                                >
+                                                    "Limpiar completados"
+                                                </button>
+                                            }.into_view()
+                                        } else {
+                                            view! { <div></div> }.into_view()
+                                        }
+                                    }}
+                                </div>
+                                <div class="grid gap-3">
+                                    <For
+                                        each=move || files.get()
+                                        key=|f| f.id.clone()
+                                        children=move |file| {
+                                            let id = file.id.clone();
+                                            let status = file.status.clone();
+                                            let error = file.error.clone();
+                                            let result = file.result.clone();
+                                            
+                                            view! {
+                                                <div class="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200 group hover:border-gray-300 transition-colors">
+                                                    // Preview/Icon
+                                                    <div class="flex-shrink-0 w-12 h-12 bg-white rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden mr-4">
+                                                        {if let Some(url) = file.preview_url {
+                                                            view! { <img src=url class="w-full h-full object-cover" /> }.into_view()
+                                                        } else {
+                                                            view! {
+                                                                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                                                </svg>
+                                                            }.into_view()
+                                                        }}
+                                                    </div>
+                                                    
+                                                    // Info
+                                                    <div class="flex-grow min-w-0 mr-4">
+                                                        <p class="text-sm font-medium text-gray-900 truncate">
+                                                            {file.file.name()}
+                                                        </p>
+                                                        <div class="text-xs mt-1">
+                                                            {match status {
+                                                                UploadStatus::Pending => view! { <span class="text-gray-500">"Pendiente"</span> }.into_view(),
+                                                                UploadStatus::Processing => view! { <span class="text-blue-600 animate-pulse">"Procesando..."</span> }.into_view(),
+                                                                UploadStatus::Success => {
+                                                                    if let Some(res) = result {
+                                                                        if let Some(ingestion) = res.ingestion {
+                                                                            view! { 
+                                                                                <span class="text-green-600 font-medium">
+                                                                                    {format!("Guardado: {:.2}€ ({} prods)", res.ocr.total.unwrap_or(0.0), ingestion.productos_insertados)}
+                                                                                </span> 
+                                                                            }.into_view()
+                                                                        } else {
+                                                                            view! { <span class="text-yellow-600">"Procesado (Solo OCR)"</span> }.into_view()
+                                                                        }
+                                                                    } else {
+                                                                        view! { <span class="text-green-600">"Completado"</span> }.into_view()
+                                                                    }
+                                                                },
+                                                                UploadStatus::Error => view! { <span class="text-red-600">{error.unwrap_or_default()}</span> }.into_view(),
+                                                            }}
+                                                        </div>
+                                                    </div>
+
+                                                    // Status Icon / Action
+                                                    <div class="flex-shrink-0">
+                                                        {match status {
+                                                            UploadStatus::Pending => view! {
+                                                                <button 
+                                                                    class="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                                                    on:click=move |_| remove_file(id.clone())
+                                                                    title="Eliminar"
+                                                                >
+                                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                                    </svg>
+                                                                </button>
+                                                            }.into_view(),
+                                                            UploadStatus::Processing => view! {
+                                                                <svg class="w-5 h-5 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                </svg>
+                                                            }.into_view(),
+                                                            UploadStatus::Success => view! {
+                                                                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                                </svg>
+                                                            }.into_view(),
+                                                            UploadStatus::Error => view! {
+                                                                <button 
+                                                                    class="p-1 text-red-500 hover:text-red-700 transition-colors"
+                                                                    on:click=move |_| remove_file(id.clone())
+                                                                    title="Eliminar"
+                                                                >
+                                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                                    </svg>
+                                                                </button>
+                                                            }.into_view(),
+                                                        }}
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        }.into_view()
+                    } else {
+                        view! { <div></div> }.into_view()
+                    }}
+
+                    // Action buttons
+                    <div class="flex gap-4">
+                        {move || if !files.get().is_empty() {
+                            let has_pending = files.get().iter().any(|f| f.status == UploadStatus::Pending || f.status == UploadStatus::Error);
+                            
+                            view! {
+                                <>
+                                    <Button
+                                        full_width=true
+                                        loading=processing.get()
+                                        disabled=processing.get() || !has_pending
+                                        on:click=handle_process_all
+                                    >
+                                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                        {move || if processing.get() { "Procesando..." } else { "Procesar tickets pendientes" }}
+                                    </Button>
+                                </>
+                            }.into_view()
+                        } else {
+                            view! { <div></div> }.into_view()
+                        }}
+                    </div>
+
+                </div>
             </Card>
 
             // Tips section
@@ -327,85 +426,6 @@ pub fn Upload() -> impl IntoView {
                     </div>
                 </Card>
             </div>
-
-            // Resultado del procesamiento OCR
-            {move || ocr_result.get().map(|result| view! {
-                <Card class="animate-slide-up bg-gradient-to-br from-green-50 to-blue-50".to_string()>
-                    <div class="space-y-6">
-                        <div class="flex items-center justify-between border-b border-gray-200 pb-4">
-                            <h2 class="text-2xl font-bold text-gray-900 flex items-center">
-                                <svg class="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                "Resultado del procesamiento"
-                            </h2>
-                            {if result.ingestion.is_some() {
-                                view! {
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                        </svg>
-                                        "Guardado en BD"
-                                    </span>
-                                }.into_view()
-                            } else {
-                                view! {
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-                                        "Solo OCR"
-                                    </span>
-                                }.into_view()
-                            }}
-                        </div>
-
-                        // Información principal
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                                <div class="text-sm text-gray-600 mb-1">"Factura"</div>
-                                <div class="text-xl font-bold text-gray-900">
-                                    {result.ocr.numero_factura.clone().unwrap_or_else(|| "N/A".to_string())}
-                                </div>
-                            </div>
-                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                                <div class="text-sm text-gray-600 mb-1">"Fecha"</div>
-                                <div class="text-xl font-bold text-gray-900">
-                                    {result.ocr.fecha.clone().unwrap_or_else(|| "N/A".to_string())}
-                                </div>
-                            </div>
-                            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                                <div class="text-sm text-gray-600 mb-1">"Total"</div>
-                                <div class="text-xl font-bold text-primary-600">
-                                    {format!("{:.2}€", result.ocr.total.unwrap_or(0.0))}
-                                </div>
-                            </div>
-                        </div>
-
-                        // Estado de la ingesta
-                        {if let Some(ingestion) = &result.ingestion {
-                            view! {
-                                <div class="bg-white p-4 rounded-lg shadow-sm border border-green-200">
-                                    <div class="flex items-start">
-                                        <svg class="w-6 h-6 text-green-600 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                        </svg>
-                                        <div>
-                                            <h3 class="text-base font-semibold text-gray-900 mb-1">"Ticket guardado correctamente"</h3>
-                                            <p class="text-sm text-gray-600">
-                                                {format!(
-                                                    "{} productos guardados en la base de datos. Fecha/Hora: {}",
-                                                    ingestion.productos_insertados,
-                                                    ingestion.fecha_hora
-                                                )}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            }.into_view()
-                        } else {
-                            view! { <div></div> }.into_view()
-                        }}
-                    </div>
-                </Card>
-            })}
         </div>
     }
 }
