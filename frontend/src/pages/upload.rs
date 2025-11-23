@@ -1,6 +1,7 @@
 use crate::api::tickets::{process_ticket_ocr, ProcessTicketResponse};
 use crate::components::{Button, ButtonVariant, Card};
 use leptos::*;
+use std::collections::HashSet;
 use web_sys::{File, HtmlInputElement};
 
 #[derive(Clone, PartialEq)]
@@ -25,6 +26,7 @@ struct FileStatus {
 pub fn Upload() -> impl IntoView {
     let (files, set_files) = create_signal(Vec::<FileStatus>::new());
     let (processing, set_processing) = create_signal(false);
+    let (processing_batch, set_processing_batch) = create_signal(HashSet::<String>::new());
     let (_user_email, set_user_email) = create_signal(None::<String>);
 
     // Obtener email del usuario de localStorage
@@ -114,13 +116,22 @@ pub fn Upload() -> impl IntoView {
                 }
             }
             
-            // Check if all files are done to stop global processing state
-            files.with(|files| {
-                let all_done = files.iter().all(|f| f.status == UploadStatus::Success || f.status == UploadStatus::Error);
-                if all_done {
-                    set_processing.set(false);
-                }
+            // Check if all files in the current batch are done
+            let batch_complete = files.with(|files| {
+                processing_batch.with(|batch_ids| {
+                    batch_ids.iter().all(|batch_id| {
+                        files.iter()
+                            .find(|f| &f.id == batch_id)
+                            .map(|f| f.status == UploadStatus::Success || f.status == UploadStatus::Error)
+                            .unwrap_or(true) // If file was removed, consider it done
+                    })
+                })
             });
+            
+            if batch_complete {
+                set_processing.set(false);
+                set_processing_batch.set(HashSet::new());
+            }
         });
     };
 
@@ -134,6 +145,12 @@ pub fn Upload() -> impl IntoView {
             return;
         }
 
+        // Capture IDs of files in this batch
+        let batch_ids: HashSet<String> = pending_files.iter()
+            .map(|f| f.id.clone())
+            .collect();
+        
+        set_processing_batch.set(batch_ids);
         set_processing.set(true);
         
         for file in pending_files {
