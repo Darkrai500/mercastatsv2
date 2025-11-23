@@ -157,6 +157,73 @@ pub fn TicketHistory() -> impl IntoView {
         pages
     };
 
+    // Renderizado de paginación reutilizable
+    let render_pagination = move |is_bottom: bool| {
+        let total = total_pages();
+        if total > 1 {
+            view! {
+                <div class=format!(
+                    "flex flex-col items-center justify-center {}", 
+                    if is_bottom { "mt-6 pt-4 border-t border-gray-100" } else { "mb-6 pb-4 border-b border-gray-100" }
+                )>
+                    <div class="flex items-center space-x-2">
+                        // Botón Anterior
+                        <button
+                            on:click=move |_| set_current_page.update(|p| *p = std::cmp::max(1, *p - 1))
+                            disabled=move || current_page.get() == 1
+                            class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-600"
+                            title="Página anterior"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                        </button>
+
+                        // Números de página
+                        <div class="flex items-center space-x-1">
+                            {move || page_numbers().into_iter().map(|page| {
+                                let is_current = page == current_page.get();
+                                view! {
+                                    <button
+                                        on:click=move |_| set_current_page.set(page)
+                                        class=format!(
+                                            "w-10 h-10 rounded-lg text-sm font-medium transition-all duration-200 {}",
+                                            if is_current {
+                                                "bg-primary-600 text-white shadow-md scale-105"
+                                            } else {
+                                                "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 hover:border-primary-200"
+                                            }
+                                        )
+                                    >
+                                        {page}
+                                    </button>
+                                }
+                            }).collect_view()}
+                        </div>
+
+                        // Botón Siguiente
+                        <button
+                            on:click=move |_| set_current_page.update(|p| *p = std::cmp::min(total, *p + 1))
+                            disabled=move || current_page.get() == total
+                            class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-600"
+                            title="Página siguiente"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="text-center mt-2 text-xs text-gray-400">
+                        {move || format!("Página {} de {}", current_page.get(), total)}
+                    </div>
+                </div>
+            }.into_view()
+        } else {
+            view! {}.into_view()
+        }
+    };
+
     view! {
         <div class="space-y-6">
             // Header
@@ -415,126 +482,72 @@ pub fn TicketHistory() -> impl IntoView {
                             }.into_view()
                         } else {
                             view! {
-                                <div class="space-y-3">
-                                    {move || {
-                                        // Obtener tickets paginados
-                                        let tickets = paginated_tickets().unwrap_or_else(Vec::new);
+                                <div>
+                                    // Paginación Superior
+                                    {render_pagination(false)}
 
-                                        tickets.into_iter().enumerate().map(|(index, ticket)| {
-                                            let numero_factura = ticket.numero_factura.clone();
-                                            let fecha_str = ticket.fecha_hora.split('T').next().unwrap_or(&ticket.fecha_hora).to_string();
-                                            let tienda_str = ticket.tienda.clone().unwrap_or_else(|| "N/A".to_string());
-                                            let ubicacion_opt = ticket.ubicacion.clone();
-                                            let total_str = ticket.total.clone();
-                                            let num_productos_str = ticket.num_productos.map(|n| format!("{} productos", n)).unwrap_or_else(|| "N/A".to_string());
-                                            
-                                            let delay = index as u64 * 75; // 75ms delay per item
-
-                                            view! {
-                                                <div 
-                                                    class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 animate-slide-up"
-                                                    style=format!("animation-delay: {}ms", delay)
-                                                >
-                                                    <div class="flex items-center justify-between">
-                                                        <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                                                            // Factura
-                                                            <div>
-                                                                <div class="text-xs text-gray-500 mb-1">"Factura"</div>
-                                                                <div class="font-semibold text-gray-900">{numero_factura}</div>
-                                                            </div>
-
-                                                            // Fecha
-                                                            <div>
-                                                                <div class="text-xs text-gray-500 mb-1">"Fecha"</div>
-                                                                <div class="text-gray-900">{fecha_str}</div>
-                                                            </div>
-
-                                                            // Tienda
-                                                            <div>
-                                                                <div class="text-xs text-gray-500 mb-1">"Tienda"</div>
-                                                                <div class="text-gray-900">{tienda_str}</div>
-                                                                {ubicacion_opt.map(|ubicacion| view! {
-                                                                    <div class="text-xs text-gray-500 mt-0.5">{ubicacion}</div>
-                                                                })}
-                                                            </div>
-
-                                                            // Total
-                                                            <div class="text-right">
-                                                                <div class="text-xs text-gray-500 mb-1">"Total"</div>
-                                                                <div class="text-xl font-bold text-primary-600">
-                                                                    {total_str}"€"
+                                    <div class="space-y-3">
+                                        {move || {
+                                            // Obtener tickets paginados
+                                            let tickets = paginated_tickets().unwrap_or_else(Vec::new);
+    
+                                            tickets.into_iter().enumerate().map(|(index, ticket)| {
+                                                let numero_factura = ticket.numero_factura.clone();
+                                                let fecha_str = ticket.fecha_hora.split('T').next().unwrap_or(&ticket.fecha_hora).to_string();
+                                                let tienda_str = ticket.tienda.clone().unwrap_or_else(|| "N/A".to_string());
+                                                let ubicacion_opt = ticket.ubicacion.clone();
+                                                let total_str = ticket.total.clone();
+                                                let num_productos_str = ticket.num_productos.map(|n| format!("{} productos", n)).unwrap_or_else(|| "N/A".to_string());
+                                                
+                                                let delay = index as u64 * 75; // 75ms delay per item
+    
+                                                view! {
+                                                    <div 
+                                                        class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 animate-slide-up"
+                                                        style=format!("animation-delay: {}ms", delay)
+                                                    >
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                                // Factura
+                                                                <div>
+                                                                    <div class="text-xs text-gray-500 mb-1">"Factura"</div>
+                                                                    <div class="font-semibold text-gray-900">{numero_factura}</div>
                                                                 </div>
-                                                                <div class="text-xs text-gray-500">{num_productos_str}</div>
+    
+                                                                // Fecha
+                                                                <div>
+                                                                    <div class="text-xs text-gray-500 mb-1">"Fecha"</div>
+                                                                    <div class="text-gray-900">{fecha_str}</div>
+                                                                </div>
+    
+                                                                // Tienda
+                                                                <div>
+                                                                    <div class="text-xs text-gray-500 mb-1">"Tienda"</div>
+                                                                    <div class="text-gray-900">{tienda_str}</div>
+                                                                    {ubicacion_opt.map(|ubicacion| view! {
+                                                                        <div class="text-xs text-gray-500 mt-0.5">{ubicacion}</div>
+                                                                    })}
+                                                                </div>
+    
+                                                                // Total
+                                                                <div class="text-right">
+                                                                    <div class="text-xs text-gray-500 mb-1">"Total"</div>
+                                                                    <div class="text-xl font-bold text-primary-600">
+                                                                        {total_str}"€"
+                                                                    </div>
+                                                                    <div class="text-xs text-gray-500">{num_productos_str}</div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            }
-                                        }).collect_view()
-                                    }}
+                                                }
+                                            }).collect_view()
+                                        }}
+                                    </div>
+                                    
+                                    // Paginación Inferior
+                                    {render_pagination(true)}
                                 </div>
-                                
-                                // Paginación
-                                {move || {
-                                    let total = total_pages();
-                                    if total > 1 {
-                                        view! {
-                                            <div class="flex items-center justify-center space-x-2 mt-6 pt-4 border-t border-gray-100">
-                                                // Botón Anterior
-                                                <button
-                                                    on:click=move |_| set_current_page.update(|p| *p = std::cmp::max(1, *p - 1))
-                                                    disabled=move || current_page.get() == 1
-                                                    class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-600"
-                                                    title="Página anterior"
-                                                >
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                                    </svg>
-                                                </button>
-
-                                                // Números de página
-                                                <div class="flex items-center space-x-1">
-                                                    {move || page_numbers().into_iter().map(|page| {
-                                                        let is_current = page == current_page.get();
-                                                        view! {
-                                                            <button
-                                                                on:click=move |_| set_current_page.set(page)
-                                                                class=format!(
-                                                                    "w-10 h-10 rounded-lg text-sm font-medium transition-all duration-200 {}",
-                                                                    if is_current {
-                                                                        "bg-primary-600 text-white shadow-md scale-105"
-                                                                    } else {
-                                                                        "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 hover:border-primary-200"
-                                                                    }
-                                                                )
-                                                            >
-                                                                {page}
-                                                            </button>
-                                                        }
-                                                    }).collect_view()}
-                                                </div>
-
-                                                // Botón Siguiente
-                                                <button
-                                                    on:click=move |_| set_current_page.update(|p| *p = std::cmp::min(total, *p + 1))
-                                                    disabled=move || current_page.get() == total
-                                                    class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-600"
-                                                    title="Página siguiente"
-                                                >
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                            
-                                            <div class="text-center mt-2 text-xs text-gray-400">
-                                                {move || format!("Página {} de {}", current_page.get(), total)}
-                                            </div>
-                                        }.into_view()
-                                    } else {
-                                        view! {}.into_view()
-                                    }
-                                }}
                             }.into_view()
                         }}
                     </div>
