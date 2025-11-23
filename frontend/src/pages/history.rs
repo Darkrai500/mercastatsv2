@@ -420,16 +420,21 @@ pub fn TicketHistory() -> impl IntoView {
                                         // Obtener tickets paginados
                                         let tickets = paginated_tickets().unwrap_or_else(Vec::new);
 
-                                        tickets.into_iter().map(|ticket| {
+                                        tickets.into_iter().enumerate().map(|(index, ticket)| {
                                             let numero_factura = ticket.numero_factura.clone();
                                             let fecha_str = ticket.fecha_hora.split('T').next().unwrap_or(&ticket.fecha_hora).to_string();
                                             let tienda_str = ticket.tienda.clone().unwrap_or_else(|| "N/A".to_string());
                                             let ubicacion_opt = ticket.ubicacion.clone();
                                             let total_str = ticket.total.clone();
                                             let num_productos_str = ticket.num_productos.map(|n| format!("{} productos", n)).unwrap_or_else(|| "N/A".to_string());
+                                            
+                                            let delay = index as u64 * 75; // 75ms delay per item
 
                                             view! {
-                                                <div class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 animate-fade-in">
+                                                <div 
+                                                    class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 animate-slide-up"
+                                                    style=format!("animation-delay: {}ms", delay)
+                                                >
                                                     <div class="flex items-center justify-between">
                                                         <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                                                             // Factura
