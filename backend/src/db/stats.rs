@@ -256,6 +256,27 @@ pub async fn get_month_comparison(
     })
 }
 
+/// Obtiene el gasto total acumulado del año actual (YTD)
+pub async fn get_current_year_total(
+    pool: &PgPool,
+    usuario_email: &str,
+) -> Result<Decimal, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            COALESCE(SUM(total), 0)::numeric as "total!"
+        FROM compras
+        WHERE usuario_email = $1
+            AND EXTRACT(YEAR FROM fecha_hora) = EXTRACT(YEAR FROM CURRENT_DATE)
+        "#,
+        usuario_email
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(result.total)
+}
+
 /// Distribución de gasto por categoría (día de la semana, hora, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct TimeDistributionPoint {

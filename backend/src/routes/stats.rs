@@ -9,9 +9,9 @@ use serde::Deserialize;
 use super::auth::AppState;
 use crate::{
     db::{
-        get_hourly_distribution, get_month_comparison, get_monthly_spending, get_spending_trend,
-        get_top_products_by_quantity, get_top_products_by_spending, get_user_stats,
-        get_weekly_distribution,
+        get_current_year_total, get_hourly_distribution, get_month_comparison,
+        get_monthly_spending, get_spending_trend, get_top_products_by_quantity,
+        get_top_products_by_spending, get_user_stats, get_weekly_distribution,
     },
     error::AppResult,
     middleware::AuthenticatedUser,
@@ -131,10 +131,8 @@ pub async fn get_monthly_evolution(
     };
 
     let current_year = chrono::Utc::now().format("%Y").to_string();
-    let year_to_date_total = months_data
-        .iter()
-        .filter(|m| m.month.starts_with(&current_year))
-        .fold(Decimal::ZERO, |acc, m| acc + m.total);
+    // Obtener el total real del año desde la BD (no depende de months_data)
+    let year_to_date_total = get_current_year_total(&state.db_pool, &user_email).await?;
 
     let response = MonthlyEvolutionResponse {
         months: months_data,
