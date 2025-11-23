@@ -30,6 +30,10 @@ pub fn TicketHistory() -> impl IntoView {
     let (sort_by, set_sort_by) = create_signal(SortBy::Date);
     let (sort_order, set_sort_order) = create_signal(SortOrder::Descending);
     let (dropdown_open, set_dropdown_open) = create_signal(false);
+    
+    // Paginación
+    let (current_page, set_current_page) = create_signal(1);
+    const ITEMS_PER_PAGE: usize = 15;
 
     // Cargar historico al montar el componente
     let navigate = use_navigate();
@@ -59,8 +63,15 @@ pub fn TicketHistory() -> impl IntoView {
         });
     });
 
-    // Función para ordenar tickets
-    let sorted_tickets = move || {
+    // Resetear a página 1 cuando cambia el ordenamiento
+    create_effect(move |_| {
+        sort_by.get();
+        sort_order.get();
+        set_current_page.set(1);
+    });
+
+    // Función para ordenar tickets (todos)
+    let sorted_all_tickets = move || {
         history_data.get().map(|data| {
             let mut tickets = data.tickets.clone();
 
@@ -89,6 +100,61 @@ pub fn TicketHistory() -> impl IntoView {
 
             tickets
         })
+    };
+
+    // Calcular total de páginas
+    let total_pages = move || {
+        sorted_all_tickets()
+            .map(|tickets| {
+                let count = tickets.len();
+                if count == 0 {
+                    1
+                } else {
+                    (count + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE
+                }
+            })
+            .unwrap_or(1)
+    };
+
+    // Obtener tickets de la página actual
+    let paginated_tickets = move || {
+        sorted_all_tickets().map(|tickets| {
+            let page = current_page.get();
+            let start = (page - 1) * ITEMS_PER_PAGE;
+            let end = std::cmp::min(start + ITEMS_PER_PAGE, tickets.len());
+            
+            if start >= tickets.len() {
+                return Vec::new();
+            }
+            
+            tickets[start..end].to_vec()
+        })
+    };
+
+    // Generar números de página para mostrar
+    let page_numbers = move || {
+        let total = total_pages();
+        let current = current_page.get();
+        let mut pages = Vec::new();
+        
+        if total <= 7 {
+            for i in 1..=total {
+                pages.push(i);
+            }
+        } else {
+            pages.push(1);
+            let start = std::cmp::max(2, current - 1);
+            let end = std::cmp::min(total - 1, current + 1);
+            for i in start..=end {
+                pages.push(i);
+            }
+            if total > 1 {
+                pages.push(total);
+            }
+        }
+        pages.sort();
+        pages.dedup();
+        pages
     };
 
     view! {
@@ -351,8 +417,8 @@ pub fn TicketHistory() -> impl IntoView {
                             view! {
                                 <div class="space-y-3">
                                     {move || {
-                                        // Obtener y ordenar tickets de forma reactiva
-                                        let tickets = sorted_tickets().unwrap_or_else(Vec::new);
+                                        // Obtener tickets paginados
+                                        let tickets = paginated_tickets().unwrap_or_else(Vec::new);
 
                                         tickets.into_iter().map(|ticket| {
                                             let numero_factura = ticket.numero_factura.clone();
@@ -363,7 +429,7 @@ pub fn TicketHistory() -> impl IntoView {
                                             let num_productos_str = ticket.num_productos.map(|n| format!("{} productos", n)).unwrap_or_else(|| "N/A".to_string());
 
                                             view! {
-                                                <div class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">
+                                                <div class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 animate-fade-in">
                                                     <div class="flex items-center justify-between">
                                                         <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                                                             // Factura
@@ -402,6 +468,68 @@ pub fn TicketHistory() -> impl IntoView {
                                         }).collect_view()
                                     }}
                                 </div>
+                                
+                                // Paginación
+                                {move || {
+                                    let total = total_pages();
+                                    if total > 1 {
+                                        view! {
+                                            <div class="flex items-center justify-center space-x-2 mt-6 pt-4 border-t border-gray-100">
+                                                // Botón Anterior
+                                                <button
+                                                    on:click=move |_| set_current_page.update(|p| *p = std::cmp::max(1, *p - 1))
+                                                    disabled=move || current_page.get() == 1
+                                                    class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-600"
+                                                    title="Página anterior"
+                                                >
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                                    </svg>
+                                                </button>
+
+                                                // Números de página
+                                                <div class="flex items-center space-x-1">
+                                                    {move || page_numbers().into_iter().map(|page| {
+                                                        let is_current = page == current_page.get();
+                                                        view! {
+                                                            <button
+                                                                on:click=move |_| set_current_page.set(page)
+                                                                class=format!(
+                                                                    "w-10 h-10 rounded-lg text-sm font-medium transition-all duration-200 {}",
+                                                                    if is_current {
+                                                                        "bg-primary-600 text-white shadow-md scale-105"
+                                                                    } else {
+                                                                        "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 hover:border-primary-200"
+                                                                    }
+                                                                )
+                                                            >
+                                                                {page}
+                                                            </button>
+                                                        }
+                                                    }).collect_view()}
+                                                </div>
+
+                                                // Botón Siguiente
+                                                <button
+                                                    on:click=move |_| set_current_page.update(|p| *p = std::cmp::min(total, *p + 1))
+                                                    disabled=move || current_page.get() == total
+                                                    class="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-600"
+                                                    title="Página siguiente"
+                                                >
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            
+                                            <div class="text-center mt-2 text-xs text-gray-400">
+                                                {move || format!("Página {} de {}", current_page.get(), total)}
+                                            </div>
+                                        }.into_view()
+                                    } else {
+                                        view! {}.into_view()
+                                    }
+                                }}
                             }.into_view()
                         }}
                     </div>
