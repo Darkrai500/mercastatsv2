@@ -42,6 +42,28 @@ pub fn Upload() -> impl IntoView {
 
     let file_input_ref = create_node_ref::<html::Input>();
 
+    // Helper to check if batch is complete and reset processing state
+    let check_and_reset_batch = move || {
+        let batch_complete = files.with(|files| {
+            processing_batch.with(|batch_ids| {
+                if batch_ids.is_empty() {
+                    return true;
+                }
+                batch_ids.iter().all(|batch_id| {
+                    files.iter()
+                        .find(|f| &f.id == batch_id)
+                        .map(|f| f.status == UploadStatus::Success || f.status == UploadStatus::Error)
+                        .unwrap_or(true) // If file was removed, consider it done
+                })
+            })
+        });
+        
+        if batch_complete {
+            set_processing.set(false);
+            set_processing_batch.set(HashSet::new());
+        }
+    };
+
     let handle_file_select = move |ev: web_sys::Event| {
         let target = event_target::<HtmlInputElement>(&ev);
         if let Some(file_list) = target.files() {
@@ -116,22 +138,8 @@ pub fn Upload() -> impl IntoView {
                 }
             }
             
-            // Check if all files in the current batch are done
-            let batch_complete = files.with(|files| {
-                processing_batch.with(|batch_ids| {
-                    batch_ids.iter().all(|batch_id| {
-                        files.iter()
-                            .find(|f| &f.id == batch_id)
-                            .map(|f| f.status == UploadStatus::Success || f.status == UploadStatus::Error)
-                            .unwrap_or(true) // If file was removed, consider it done
-                    })
-                })
-            });
-            
-            if batch_complete {
-                set_processing.set(false);
-                set_processing_batch.set(HashSet::new());
-            }
+            // Check if batch is complete and reset processing state
+            check_and_reset_batch();
         });
     };
 
@@ -168,10 +176,12 @@ pub fn Upload() -> impl IntoView {
                 files.remove(index);
             }
         });
-        // Remove from processing batch if it was part of it
+        
+        // Remove from processing batch and check if batch is now complete
         set_processing_batch.update(|batch| {
             batch.remove(&id);
         });
+        check_and_reset_batch();
     };
 
     let clear_completed = move |_| {
@@ -196,12 +206,13 @@ pub fn Upload() -> impl IntoView {
             });
         });
         
-        // Remove completed files from processing batch
+        // Remove completed files from processing batch and check if batch is now complete
         set_processing_batch.update(|batch| {
             for id in completed_ids {
                 batch.remove(&id);
             }
         });
+        check_and_reset_batch();
     };
 
     let trigger_file_input = move |_| {
