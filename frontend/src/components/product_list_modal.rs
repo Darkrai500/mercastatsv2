@@ -2,6 +2,10 @@ use leptos::*;
 use crate::api::stats::{get_all_products, TopProductItem};
 use crate::components::{Chart, ChartSeriesData, ChartType};
 
+/// Height in pixels allocated for each product bar in the horizontal bar chart.
+/// This ensures adequate spacing for product labels and bar visibility.
+const PIXELS_PER_PRODUCT: u64 = 40;
+
 #[component]
 pub fn ProductListModal(
     is_open: Signal<bool>,
@@ -60,8 +64,8 @@ pub fn ProductListModal(
             data: product_values,
         };
 
-        // Calculate height based on number of products (e.g., 40px per product + padding)
-        let height = std::cmp::max(400, data.len() as u64 * 40);
+        // Calculate height based on number of products
+        let height = std::cmp::max(400, data.len() as u64 * PIXELS_PER_PRODUCT);
 
         Some((series_data, product_names, height))
     };
