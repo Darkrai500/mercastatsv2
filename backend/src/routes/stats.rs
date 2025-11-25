@@ -146,10 +146,39 @@ pub async fn get_monthly_evolution(
     Ok(Json(response))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ProductsQueryParams {
+    #[serde(default = "default_limit_products")]
+    pub limit: i64,
+    pub sort_by: String, // "quantity" or "spending"
+}
+
+fn default_limit_products() -> i64 {
+    100
+}
+
+/// Handler: get all products sorted by criteria
+pub async fn get_all_products_stats(
+    State(state): State<AppState>,
+    auth_user: AuthenticatedUser,
+    Query(params): Query<ProductsQueryParams>,
+) -> AppResult<Json<Vec<crate::db::TopProductItem>>> {
+    let user_email = auth_user.email;
+    let limit = params.limit.clamp(1, 1000);
+
+    let products = match params.sort_by.as_str() {
+        "spending" => get_top_products_by_spending(&state.db_pool, &user_email, limit).await?,
+        _ => get_top_products_by_quantity(&state.db_pool, &user_email, limit).await?,
+    };
+
+    Ok(Json(products))
+}
+
 /// Router para los endpoints de estadisticas
 pub fn stats_router(state: AppState) -> Router {
     Router::new()
         .route("/dashboard", get(get_dashboard_stats))
         .route("/monthly", get(get_monthly_evolution))
+        .route("/products", get(get_all_products_stats))
         .with_state(state)
 }
