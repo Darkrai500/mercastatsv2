@@ -1,6 +1,6 @@
 use leptos::*;
 use crate::api::stats::*;
-use crate::components::{Chart, ChartSeriesData, ChartType, KpiCard};
+use crate::components::{Chart, ChartSeriesData, ChartType, KpiCard, ProductListModal};
 
 #[component]
 pub fn Stats() -> impl IntoView {
@@ -12,6 +12,16 @@ pub fn Stats() -> impl IntoView {
                 .map_err(|e| leptos::logging::error!("Error cargando estadísticas: {}", e))
         },
     );
+
+    let (modal_open, set_modal_open) = create_signal(false);
+    let (modal_sort_by, set_modal_sort_by) = create_signal("quantity".to_string());
+    let (modal_title, set_modal_title) = create_signal("".to_string());
+
+    let open_modal = move |sort: String, title: String| {
+        set_modal_sort_by.set(sort);
+        set_modal_title.set(title);
+        set_modal_open.set(true);
+    };
 
     view! {
         <div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 sm:p-6 lg:p-8">
@@ -82,11 +92,13 @@ pub fn Stats() -> impl IntoView {
                                             <TopProductsChart
                                                 title="Top Productos (por cantidad)".to_string()
                                                 products=data.top_products_quantity.clone()
+                                                on_view_all=move || open_modal("quantity".to_string(), "Top Productos (por cantidad)".to_string())
                                             />
 
                                             <TopProductsChart
                                                 title="Top Productos (por gasto)".to_string()
                                                 products=data.top_products_spending.clone()
+                                                on_view_all=move || open_modal("spending".to_string(), "Top Productos (por gasto)".to_string())
                                             />
                                         </div>
 
@@ -153,6 +165,13 @@ pub fn Stats() -> impl IntoView {
                     }}
                 </Suspense>
             </div>
+
+            <ProductListModal
+                is_open=modal_open.into()
+                on_close=Callback::from(move |_| set_modal_open.set(false))
+                sort_by=modal_sort_by.into()
+                title=modal_title.into()
+            />
         </div>
     }
 }
@@ -188,7 +207,14 @@ fn TendenciaChart(daily_data: Vec<DailySpendPoint>) -> impl IntoView {
 }
 
 #[component]
-fn TopProductsChart(title: String, products: Vec<TopProductItem>) -> impl IntoView {
+fn TopProductsChart<F>(
+    title: String,
+    products: Vec<TopProductItem>,
+    on_view_all: F,
+) -> impl IntoView
+where
+    F: Fn() + 'static,
+{
     let product_names: Vec<String> = products.iter().map(|p| p.nombre.clone()).collect();
     let product_values: Vec<f64> = products
         .iter()
@@ -208,9 +234,17 @@ fn TopProductsChart(title: String, products: Vec<TopProductItem>) -> impl IntoVi
 
     view! {
         <div class="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">
-                {title_clone}
-            </h2>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">
+                    {title_clone}
+                </h2>
+                <button
+                    on:click=move |_| on_view_all()
+                    class="text-sm text-primary-600 hover:text-primary-700 font-medium hover:underline transition-colors"
+                >
+                    "Ver todos"
+                </button>
+            </div>
 
             <Chart
                 id=chart_id
