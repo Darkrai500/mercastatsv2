@@ -7,8 +7,8 @@ gunicorn==21.2.0
 pydantic==2.9.2
 pydantic-settings==2.6.0
 
-# Procesamiento de archivos
-python-multipart==0.0.12
+# Procesamiento de archivos (actualizado por CVE boundary DoS fix)
+python-multipart==0.0.18
 
 # Extracción de texto de PDFs
 pdfplumber==0.11.4
