@@ -6,18 +6,22 @@ const path = require("node:path");
 
 const RESET = "\x1b[0m";
 const colors = {
+  ocr: "\x1b[32m", // green
   backend: "\x1b[35m", // magenta
   frontend: "\x1b[36m", // cyan
   info: "\x1b[33m", // yellow
 };
 
 const projectRoot = __dirname;
+const ocrDir = path.join(projectRoot, "ocr-service");
 const backendDir = path.join(projectRoot, "backend");
 const frontendDir = path.join(projectRoot, "frontend");
 
 const cliArgs = new Set(process.argv.slice(2));
 const backendOnly = cliArgs.has("--backend-only");
 const frontendOnly = cliArgs.has("--frontend-only");
+const ocrOnly = cliArgs.has("--ocr-only");
+const noOcr = cliArgs.has("--no-ocr");
 const releaseMode = cliArgs.has("--release");
 
 if (backendOnly && frontendOnly) {
@@ -25,9 +29,29 @@ if (backendOnly && frontendOnly) {
   process.exit(1);
 }
 
+if (ocrOnly && noOcr) {
+  console.error("Cannot use --ocr-only and --no-ocr together.");
+  process.exit(1);
+}
+
 const commands = [];
 
-if (!frontendOnly) {
+const runOcr = ocrOnly ? true : !noOcr;
+const runBackend = ocrOnly ? false : !frontendOnly;
+const runFrontend = ocrOnly ? false : !backendOnly;
+
+if (runOcr) {
+  const pythonCmd = process.platform === "win32" ? "python" : "python3";
+  commands.push({
+    name: "ocr",
+    cmd: pythonCmd,
+    args: ["-m", "uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "9000", "--reload"],
+    cwd: ocrDir,
+    color: colors.ocr,
+  });
+}
+
+if (runBackend) {
   const backendArgs = ["run"];
   if (releaseMode) {
     backendArgs.push("--release");
@@ -42,7 +66,7 @@ if (!frontendOnly) {
   });
 }
 
-if (!backendOnly) {
+if (runFrontend) {
   commands.push({
     name: "frontend",
     cmd: "trunk",

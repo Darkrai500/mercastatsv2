@@ -1,9 +1,7 @@
 """
-Helpers para exponer la lógica de parsing sin depender de FastAPI.
+Helpers to expose the parsing logic without coupling to FastAPI.
 
-Este módulo se reutiliza desde el backend de Rust (vía PyO3) y desde
-la propia aplicación FastAPI para evitar duplicar lógica de ensamblado
-de la respuesta.
+This module is reused by the FastAPI app as a thin wrapper around the parser.
 """
 
 from __future__ import annotations
@@ -26,10 +24,10 @@ def process_ticket_response(
     request = ProcessTicketRequest(
         ticket_id=ticket_id,
         file_name=file_name,
-        pdf_b64=pdf_b64,
+        file_content_b64=pdf_b64,
     )
 
-    parsed_ticket = parse_ticket(request.pdf_b64)
+    parsed_ticket = parse_ticket(request.file_content_b64)
 
     return ProcessTicketResponse(
         ticket_id=request.ticket_id,

@@ -1,6 +1,7 @@
 # FastAPI y servidor
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
+gunicorn==21.2.0
 
 # Validación de datos
 pydantic==2.9.2
@@ -20,3 +21,9 @@ loguru==0.7.2
 
 # Utilidades
 python-dotenv==1.0.1
+
+# ML / Ciencia de datos (placeholder para futuros modelos)
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.5.2
+joblib==1.4.2

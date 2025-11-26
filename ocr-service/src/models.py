@@ -7,7 +7,7 @@ Define los contratos de datos entre el backend Rust y el worker Python.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class ProcessTicketRequest(BaseModel):
@@ -17,21 +17,28 @@ class ProcessTicketRequest(BaseModel):
     Attributes:
         ticket_id: ID temporal/UUID generado por el backend para correlacion
         file_name: Nombre del archivo PDF original
-        pdf_b64: Contenido del PDF codificado en base64
+        file_content_b64: Contenido del PDF codificado en base64
     """
 
     ticket_id: str = Field(..., description="ID provisional del ticket (UUID)")
     file_name: str = Field(..., description="Nombre del archivo PDF")
-    pdf_b64: str = Field(..., description="Contenido PDF en base64")
+    file_content_b64: str = Field(
+        ...,
+        description="Contenido PDF en base64",
+        validation_alias=AliasChoices("file_content_b64", "pdf_b64"),
+        serialization_alias="file_content_b64",
+    )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "ticket_id": "550e8400-e29b-41d4-a716-446655440000",
                 "file_name": "ticket_mercadona_2023.pdf",
-                "pdf_b64": "JVBERi0xLjQKJeLjz9MKMy..."
+                "file_content_b64": "JVBERi0xLjQKJeLjz9MKMy..."
             }
-        }
+        },
+    )
 
 
 class TicketProduct(BaseModel):
@@ -82,8 +89,9 @@ class ProcessTicketResponse(BaseModel):
         description="Desglose de IVA encontrado en el ticket",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "ticket_id": "550e8400-e29b-41d4-a716-446655440000",
                 "raw_text": "MERCADONA, S.A...",
@@ -113,7 +121,8 @@ class ProcessTicketResponse(BaseModel):
                     {"porcentaje": 0.0, "base_imponible": 12.69, "cuota": 0.0}
                 ]
             }
-        }
+        },
+    )
 
 
 class HealthResponse(BaseModel):
@@ -124,3 +133,46 @@ class HealthResponse(BaseModel):
     status: str = Field(default="ok")
     service: str = Field(default="ocr-service")
     version: str = Field(default="1.0.0")
+
+
+class UserContext(BaseModel):
+    """Contexto b sico del usuario para predicci¢n futura."""
+
+    current_time: datetime = Field(..., description="Fecha/hora actual en ISO 8601")
+    is_weekend: bool = Field(default=False, description="Indica si es fin de semana")
+
+
+class PurchaseHistoryItem(BaseModel):
+    """Resumen de una compra previa (placeholder para el modelo ML futuro)."""
+
+    store: Optional[str] = Field(None, description="Nombre de la tienda")
+    total_spent: Optional[float] = Field(None, description="Total gastado en la compra")
+    items_count: Optional[int] = Field(None, description="N£mero de productos comprados")
+    timestamp: Optional[datetime] = Field(None, description="Fecha de la compra")
+
+
+class PredictNextShopRequest(BaseModel):
+    """Payload inicial para el endpoint de predicci¢n (placeholder)."""
+
+    user_context: UserContext
+    purchase_history_summary: List[PurchaseHistoryItem] = Field(
+        default_factory=list,
+        description="Compras resumidas recientes",
+    )
+
+
+class PredictNextShopResponse(BaseModel):
+    """Respuesta placeholder mientras se integra el modelo ML real."""
+
+    ready: bool = Field(
+        default=False,
+        description="Indica si hay un modelo entrenado disponible",
+    )
+    message: str = Field(
+        default="Modelo ML no entrenado todav¡a",
+        description="Detalle del estado del servicio de inteligencia",
+    )
+    model_version: Optional[str] = Field(
+        default=None,
+        description="Versi¢n del modelo si estuviera disponible",
+    )

@@ -1,4 +1,3 @@
-/// Tipos de error personalizados para la aplicación
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -8,25 +7,16 @@ use serde::Serialize;
 
 #[derive(Debug)]
 pub enum AppError {
-    /// Error de base de datos
     DatabaseError(String),
-    /// Usuario no encontrado
     NotFound(String),
-    /// Credenciales inválidas
     Unauthorized(String),
-    /// Solicitud inválida (validación fallida)
     BadRequest(String),
-    /// Error interno del servidor
     InternalError(String),
-    /// Número de factura faltante en el ticket
+    ServiceUnavailable(String),
     MissingInvoiceNumber,
-    /// Los totales del ticket no son válidos o no coinciden
     InvalidTotals(String),
-    /// La compra ya existe en la base de datos (duplicado)
     DuplicatePurchase(String),
-    /// Error de integridad de base de datos (constraint violation)
     DatabaseIntegrity(String),
-    /// Datos del ticket inválidos
     InvalidTicketData(String),
 }
 
@@ -56,14 +46,21 @@ impl IntoResponse for AppError {
                     "Error interno del servidor".to_string(),
                 )
             }
+            AppError::ServiceUnavailable(msg) => {
+                tracing::warn!("Servicio externo no disponible: {}", msg);
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Servicio temporalmente no disponible".to_string(),
+                )
+            }
             AppError::MissingInvoiceNumber => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "El ticket no contiene número de factura".to_string(),
+                "El ticket no contiene numero de factura".to_string(),
             ),
             AppError::InvalidTotals(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
             AppError::DuplicatePurchase(invoice) => (
                 StatusCode::CONFLICT,
-                format!("La compra con número de factura {} ya existe", invoice),
+                format!("La compra con numero de factura {} ya existe", invoice),
             ),
             AppError::DatabaseIntegrity(msg) => {
                 tracing::error!("Database integrity error: {}", msg);
@@ -89,21 +86,20 @@ impl From<sqlx::Error> for AppError {
         match err {
             sqlx::Error::RowNotFound => AppError::NotFound("Usuario no encontrado".to_string()),
             sqlx::Error::Database(db_err) => {
-                // Manejar constraint violations específicas
                 if let Some(constraint) = db_err.constraint() {
                     if constraint.contains("unique") || constraint.contains("pk") {
                         return AppError::DatabaseIntegrity(format!(
-                            "Violación de unicidad: {}",
+                            "Violacion de unicidad: {}",
                             constraint
                         ));
                     } else if constraint.contains("fk") {
                         return AppError::DatabaseIntegrity(format!(
-                            "Violación de clave foránea: {}",
+                            "Violacion de clave foranea: {}",
                             constraint
                         ));
                     } else if constraint.contains("check") {
                         return AppError::DatabaseIntegrity(format!(
-                            "Violación de constraint: {}",
+                            "Violacion de constraint: {}",
                             constraint
                         ));
                     }

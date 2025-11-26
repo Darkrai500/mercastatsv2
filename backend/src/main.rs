@@ -14,6 +14,7 @@ use tower_http::cors::CorsLayer;
 
 use config::AppConfig;
 use routes::auth::AppState;
+use services::IntelligenceClient;
 
 /// Health check endpoint
 async fn health() -> &'static str {
@@ -22,7 +23,6 @@ async fn health() -> &'static str {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Inicializar logging
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -30,22 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    // Cargar configuración
     let config = AppConfig::from_env().map_err(|e| {
-        eprintln!("Error de configuración: {}", e);
+        eprintln!("Error de configuracion: {}", e);
         e
     })?;
-
-    // =================================================================
-    // FASE DE PRE-CALENTAMIENTO (WARM-UP)
-    // =================================================================
-    // Esto bloqueará el inicio unos segundos, pero garantiza velocidad después.
-    if let Err(e) = services::init_python_worker() {
-        tracing::error!("❌ Error CRÍTICO inicializando el worker de Python: {}", e);
-        tracing::error!("El servidor no puede arrancar sin el subsistema OCR.");
-        return Err(e.into());
-    }
-    // =================================================================
 
     tracing::info!("Iniciando servidor en {}:{}", config.host, config.port);
 
@@ -57,32 +45,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Conectado a la base de datos");
 
-    // Crear estado de la aplicación
+    // Cliente HTTP para el servicio externo de inteligencia (OCR/ML)
+    let intelligence_client = IntelligenceClient::new(
+        config.intelligence_service_url.clone(),
+        config.intelligence_api_key.clone(),
+        config.intelligence_timeout_secs,
+        config.intelligence_max_retries,
+    )?;
+
+    if let Err(err) = intelligence_client.health().await {
+        tracing::warn!(
+            "Servicio de inteligencia no disponible en el arranque: {}",
+            err
+        );
+    } else {
+        tracing::info!("Servicio de inteligencia disponible");
+    }
+
+    // Crear estado de la aplicacion
     let state = AppState {
         db_pool: pool,
         config: config.clone(),
+        intelligence_client: intelligence_client.clone(),
     };
 
     // Construir el router
     let app = Router::new()
-        // Health check
         .route("/health", get(health))
-        // Rutas de autenticación
         .nest("/api/auth", routes::auth_router(state.clone()))
-        // OCR embebido
         .nest("/api/ocr", routes::ocr_router(state.clone()))
-        // Rutas de tickets
         .nest("/api/tickets", routes::tickets_router(state.clone()))
-        // Rutas de estadísticas
         .nest("/api/stats", routes::stats_router(state.clone()))
-        // CORS middleware
         .layer(CorsLayer::permissive());
 
-    // Crear dirección del servidor
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
     tracing::info!("Servidor escuchando en http://{}", addr);
 
-    // Crear listener y ejecutar
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
