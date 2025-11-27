@@ -1,65 +1,78 @@
 # 📊 Mercastats
 
-> **Análisis estadístico inteligente de tus compras del Mercadona**
+> **Análisis inteligente de tickets y hábitos de compra en Mercadona**
 
-[![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.77+-orange.svg)](https://www.rust-lang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-blue.svg)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Intelligence%20Service-009485.svg)](https://fastapi.tiangolo.com/)
 [![Status](https://img.shields.io/badge/Status-En%20Desarrollo-yellow.svg)](https://github.com/tu-usuario/mercastats)
 
 ---
 
 ## 🎯 ¿Qué es Mercastats?
 
-Mercastats es una aplicación web full-stack que te permite:
+Mercastats es una plataforma full-stack que conecta **backend en Rust**, **servicio de inteligencia en Python (OCR + ML)** y **frontend Leptos** para digitalizar tus tickets de Mercadona y generar insights accionables. Con ella puedes:
 
-- 📸 **Subir tickets** de compra (PDF)
-- 📊 **Visualizar estadísticas** básicas de tus hábitos de consumo
-- 📜 **Consultar tu historial** de tickets
-- (_Próximamente_) 💰 Calcular tu inflación personal basada en tus productos favoritos
-- (_Próximamente_) 📈 Detectar tendencias en tus compras
-- (_Próximamente_) 🎯 Establecer objetivos de ahorro mensuales
-- (_Próximamente_) 🏆 Desbloquear logros mientras haces tus compras más inteligentes
+- 📸 **Procesar tickets PDF** con OCR y guardarlos en PostgreSQL con validaciones.
+- 📜 **Consultar el historial completo** de tickets por usuario.
+- 📊 **Explorar estadísticas**: tendencia diaria, comparativa mensual, distribución semanal/horaria y productos top.
+- 🤖 **Recibir predicciones** sobre tu próxima compra y sugerencias basadas en tu histórico.
+- 🖥️ **Usar un frontend reactivo** construido en Rust (WASM) + Tailwind.
 
 ---
 
 ## ✨ Características Principales
 
 ### Implementado ✅
-- ✅ **Autenticación de Usuarios**: Registro e inicio de sesión seguros con JWT.
-- ✅ **Subida de Tickets**: Interfaz para subir archivos PDF de tickets de Mercadona.
-- ✅ **Procesamiento OCR**: Extracción de datos (número de factura, fecha, total, productos) de PDFs usando una integración Python (PyO3).
-- ✅ **Persistencia de Datos**: Guardado de la información de compras y productos en base de datos PostgreSQL.
-- ✅ **Historial de Tickets**: Visualización del listado de tickets subidos con opción de ordenación.
-- ✅ **Estadísticas Básicas**: Resumen de número total de tickets, gasto total y gasto promedio.
-- ✅ **Frontend Reactivo**: Interfaz de usuario moderna construida con Leptos (WASM) y Tailwind CSS.
+- ✅ **Autenticación con JWT**: Registro, login y middleware de autorización.
+- ✅ **Procesamiento OCR**: Endpoint `/api/ocr/process` que llama al **Intelligence Service** (FastAPI) para extraer factura, fecha, total, desglose de IVA y líneas de producto.
+- ✅ **Ingesta de tickets**: Validaciones, idempotencia por número de factura y escritura transaccional en `usuarios`, `compras`, `compras_productos` y PDFs.
+- ✅ **Historial de tickets**: Endpoint `/api/tickets/history` con paginación y métricas agregadas por usuario.
+- ✅ **Dashboard de estadísticas**: `/api/stats/dashboard` y `/api/stats/monthly` con tendencia diaria, comparación mes actual vs anterior, top productos por cantidad/gasto y distribuciones semanal/horaria.
+- ✅ **Predicción de próxima compra**: `/api/predict/next` combina vistas analíticas (`ml_ticket_features`) con el modelo Python para estimar ventana temporal, total esperado y productos sugeridos.
+- ✅ **Frontend Leptos + Tailwind**: Páginas de login/registro, subida de tickets, historial, dashboard, evolución mensual y predicción.
 
-### 🔍 Análisis Avanzados (Futuro)
-- 🔎 Detección de tendencias de consumo
-- 🔎 Cálculo de inflación personalizada
-- 🔎 Comparativa de ticket medio por tienda
-- 🔎 Predicción de gasto del próximo mes
-
-### 🎮 Gamificación (Futuro)
-- 🏆 Sistema de logros desbloqueables
-- 🎯 Objetivos de ahorro configurables
-- 📅 Calendario de compras
-- 🔥 Rachas y estadísticas personales
+### En el radar 🔍
+- 🔎 Mejora de OCR (afinado de parsing y warm-up en despliegue).
+- 🔎 Gráficos avanzados en frontend (Chart.js/Plotters) y comparativas de tiendas.
+- 🔎 Gamificación (objetivos, logros) y refresco de tokens.
+- 🔎 Dockerización completa y healthchecks unificados.
 
 ---
 
 ## 🏗️ Arquitectura Técnica
 
-### Stack Tecnológico
+```
+┌────────────────────────────────────────────────────────┐
+│                FRONTEND (Leptos + Tailwind)            │
+│  - SPA WASM: login, registro, upload, historial,       │
+│    dashboard, evolución mensual, predicciones          │
+└───────────────────────────┬────────────────────────────┘
+                            │ (REST + JWT)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│            BACKEND (Rust · Axum · SQLx)                │
+│  - Auth JWT, middleware y validaciones                 │
+│  - OCR + ingesta de tickets                            │
+│  - Estadísticas (tendencias, top productos,            │
+│    distribuciones)                                     │
+│  - Orquestación con Intelligence Service               │
+└─────────────┬──────────────────────┬──────────────────┘
+              │                      │
+              ▼                      ▼
+      PostgreSQL 16          Intelligence Service (FastAPI)
+      - Schema completo      - /ocr/process (pdfplumber)
+      - Vistas analíticas    - /predict/next (scikit-learn)
+      - Índices y checks     - /health
+```
 
 | Componente | Tecnología | Por qué |
 |------------|-----------|---------|
-| **Backend** | Rust + Axum | Rendimiento extremo, type-safety, memoria segura |
-| **Database** | PostgreSQL 16 | Funciones analíticas, JSON, triggers automáticos |
-| **ORM** | SQLx | Validación de queries en compile-time |
-| **Frontend** | Leptos (WASM) | Rendimiento nativo, Rust end-to-end |
-| **OCR** | Python + pdfplumber | Lógica de extracción de texto y parsing integrada vía PyO3 |
-| **ML** | Python + scikit-learn (_Futuro_) | Prototipado rápido de modelos predictivos |
+| **Backend** | Rust + Axum | Rendimiento, seguridad de memoria y tipado fuerte. |
+| **Database** | PostgreSQL 16 | Funciones analíticas, vistas para ML y constraints sólidos. |
+| **ORM** | SQLx | Validación de consultas en compile-time. |
+| **Intelligence** | FastAPI + pdfplumber + scikit-learn | OCR robusto y modelos de predicción reutilizables. |
+| **Frontend** | Leptos (WASM) + Tailwind | UI reactiva en Rust con estilo utility-first. |
 
 ---
 
@@ -68,194 +81,126 @@ Mercastats es una aplicación web full-stack que te permite:
 ### Prerrequisitos
 
 ```powershell
-# Instalar Rust (https://rustup.rs/)
-rustup --version  # 1.75+
+# Rust toolchain
+rustup --version  # 1.77+
 
-# Instalar PostgreSQL (https://www.postgresql.org/download/)
+# PostgreSQL
 psql --version    # 16+
 
-# Instalar Python (necesario para la integración OCR vía PyO3)
-python --version # 3.8+
+# Python para Intelligence Service (OCR + ML)
+python3 --version # 3.11+ recomendado
 
 # Herramientas adicionales
 cargo install sqlx-cli --no-default-features --features postgres
-cargo install cargo-watch
-cargo install trunk # Para el frontend Leptos
+cargo install trunk               # Frontend Leptos
+npm install -g pm2 (opcional)     # Orquestación alternativa
 ```
 
-### Instalación
+### Instalación y arranque
 
 ```powershell
-# 1. Clonar el repositorio
+# 1) Clonar y preparar entorno
 git clone https://github.com/tu-usuario/mercastats.git
 cd mercastats
+cp .env.example .env   # Ajusta DATABASE_URL, JWT_SECRET e INTELLIGENCE_SERVICE_URL
 
-# 2. Configurar base de datos
-psql -U postgres
-CREATE DATABASE mercastats;
-CREATE USER mercastats_app WITH PASSWORD 'tu_password'; # Cambia 'tu_password'
-GRANT ALL PRIVILEGES ON DATABASE mercastats TO mercastats_app;
-\q
-
-# Ejecutar schema
+# 2) Base de datos
+psql -U postgres -c "CREATE DATABASE mercastats;"
 psql -U postgres -d mercastats -f sql/schema/schema.sql
 
-# 3. Configurar variables de entorno
-cp .env.example .env
-# Edita .env con tus valores
-
-# 4. Instalar dependencias Python para OCR
-cd ocr-service
-python -m venv .venv
-source .venv/bin/activate   # (en Linux/Mac) o .venv\Scripts\Activate.ps1 (en Windows)
+# 3) Servicio de inteligencia (FastAPI)
+cd intelligence-service
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+uvicorn main:app --host 127.0.0.1 --port 8001 --reload &
 cd ..
 
-# 5. Compilar proyecto Rust
-cargo build
-
-# 6. Preparar SQLx
-cargo sqlx prepare --workspace
-
-# 7. Ejecutar Backend y Frontend
-node dev.js
-# o en terminales separadas:
-# cd backend && cargo watch -x run
-# cd frontend && trunk serve
+# 4) Backend y frontend
+cargo sqlx prepare --workspace   # valida queries
+node dev.js                      # levanta intelligence + backend + frontend
+# Flags útiles: --backend-only | --frontend-only | --intelligence-only | --release
 ```
 
-La aplicación frontend estará corriendo en `http://127.0.0.1:3000` y el backend en `http://127.0.0.1:8000`.
-
------
-
-## 📂 Estructura del Proyecto
+Estructura rápida del repo:
 
 ```
-mercastats/
-├── backend/
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── config.rs
-│   │   ├── db/
-│   │   ├── error.rs
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── schema/
-│   │   └── services/
-│   └── Cargo.toml
-│
-├── frontend/
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── api/
-│   │   ├── components/
-│   │   └── pages/
-│   ├── index.html
-│   ├── Trunk.toml
-│   └── Cargo.toml
-│
-├── ocr-service/
-│   ├── src/
-│   │   ├── processor.py
-│   │   ├── services/
-│   │   ├── models.py
-│   │   └── constants.py
-│   └── requirements.txt
-│
-├── sql/schema/schema.sql
-├── docs/
-├── .env.example
-├── claude.md
-├── Cargo.toml
-└── README.md
+backend/                # Axum + SQLx (auth, OCR, stats, predicciones)
+frontend/               # Leptos + Tailwind (pages: login, registro, upload, historial, dashboard, monthly, prediction)
+intelligence-service/   # FastAPI (OCR + ML)
+sql/schema/             # Schema SQL completo + vistas analíticas
+docs/                   # Documentación técnica y planes
+dev.js                  # Orquestador local (Node)
 ```
 
------
+---
 
 ## 🧪 Testing
 
 ```powershell
-# Ejecutar todos los tests
+# Ejecutar tests de Rust (workspace)
 cargo test --workspace
 
-# Backend con logs
+# Backend con logs detallados
 cd backend
 cargo test -- --nocapture
-
-# Tests específicos
-cargo test db::users -- --nocapture
 ```
 
------
+Para validar consultas SQL, ejecuta `cargo sqlx prepare --workspace` tras modificar queries.
+
+---
 
 ## 📚 Documentación
 
-### Para Desarrolladores
-- [claude.md](claude.md)  
-- [docs/BACKEND_TICKET_INGESTION_PLAN.md](docs/BACKEND_TICKET_INGESTION_PLAN.md)  
-- [docs/OCR_INTEGRATION_NOTES.md](docs/OCR_INTEGRATION_NOTES.md)  
-- [sql/schema/schema.sql](sql/schema/schema.sql)  
-- [frontend/README.md](frontend/README.md)  
-- [ocr-service/README.md](ocr-service/README.md)  
+- [claude.md](../claude.md)
+- [docs/BACKEND_TICKET_INGESTION_PLAN.md](BACKEND_TICKET_INGESTION_PLAN.md)
+- [docs/OCR_INTEGRATION_NOTES.md](OCR_INTEGRATION_NOTES.md)
+- [docs/OCR_WARMUP_IMPLEMENTATION.md](OCR_WARMUP_IMPLEMENTATION.md)
+- [docs/WARMUP_FEATURE_SUMMARY.md](WARMUP_FEATURE_SUMMARY.md)
+- [sql/schema/schema.sql](../sql/schema/schema.sql)
+- [frontend/README.md](../frontend/README.md)
 
-### Recursos Externos
-- [Rust Book](https://doc.rust-lang.org/book/)  
-- [Axum Documentation](https://docs.rs/axum/)  
-- [SQLx Guide](https://github.com/launchbadge/sqlx)  
-- [Leptos Book](https://leptos-rs.github.io/leptos/)  
-- [PostgreSQL Docs](https://www.postgresql.org/docs/16/)  
+Recursos externos: [Rust Book](https://doc.rust-lang.org/book/), [Axum](https://docs.rs/axum/), [SQLx](https://github.com/launchbadge/sqlx), [Leptos](https://leptos-rs.github.io/leptos/), [FastAPI](https://fastapi.tiangolo.com/).
 
------
+---
 
 ## 🛣️ Roadmap
 
 ### Implementado ✅
-- Setup del Proyecto  
-- Base de Datos  
-- Backend Core  
-- Autenticación  
-- OCR y Procesamiento de Tickets  
-- Historial y Estadísticas Básicas  
-- Frontend Core  
-- Páginas Frontend  
-- Integración Frontend-Backend  
+- Setup del proyecto y base de datos con vistas para ML (`ml_ticket_features`).
+- Backend core (auth, middleware, validaciones, ingestión de tickets, stats, predicciones).
+- Integración completa con Intelligence Service (OCR + predict).
+- Frontend Leptos con páginas principales y consumo de API.
 
-### Próximos Pasos 📋
-- [ ] Estadísticas avanzadas en frontend  
-- [ ] Endpoints de estadísticas avanzadas en backend  
-- [ ] OCR mejorado (Tesseract)  
-- [ ] Gamificación (objetivos, logros)  
-- [ ] Refresh tokens  
-- [ ] Tests adicionales  
-- [ ] Dockerización completa  
+### Próximos pasos 📋
+- [ ] Gráficos y visualizaciones avanzadas en el dashboard.
+- [ ] Gamificación (logros, objetivos) y refresco de tokens.
+- [ ] Paquetes Docker y healthchecks unificados (backend + intelligence).
+- [ ] Suite de tests end-to-end y contract tests para OCR/ML.
 
------
+---
 
 ## 📄 Licencia
 
-Este proyecto está bajo la licencia MIT. Ver `LICENSE` para más detalles.
+MIT. Consulta `LICENSE` para más detalles.
 
------
+---
 
 ## 👨‍💻 Autor
 
 **Juan Carlos**
 
------
+---
 
 ## 📊 Estado del Proyecto
 
 ```
-Progreso General: ████████████████░░░░░░ 65%
-Backend:          ███████████████████░░░ 75%
-Frontend:         ██████████████░░░░░░░ 60%
-Workers Python:   ████████░░░░░░░░░░░░░ 40%
-Documentación:    ████████████████░░░░░ 80%
-Tests:            ████████░░░░░░░░░░░░░ 40%
+Progreso General: ██████████████████░░░░ 80%
+Backend:          ████████████████████░░ 85%
+Frontend:         ███████████████░░░░░░░ 70%
+Intelligence:     ██████████████░░░░░░░░ 65%
+Documentación:    █████████████████░░░░ 85%
+Tests:            █████████░░░░░░░░░░░░░ 55%
 ```
-
------
 
 <p align="center">
 Hecho con ❤️ y 🦀 (Rust)
