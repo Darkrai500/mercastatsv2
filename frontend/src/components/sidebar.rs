@@ -161,13 +161,18 @@ pub fn Sidebar(
                     }
                     on:click=move |_| on_view_change.call(DashboardView::Prediction)
                 >
-                    <img
-                        src="/icono-estrella.png?v=2"
-                        alt=""
-                        class="w-5 h-5 object-contain flex-shrink-0"
-                        loading="lazy"
-                        draggable="false"
-                    />
+                    <svg
+                        class="w-5 h-5 flex-shrink-0"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                    >
+                        <path
+                            fill="currentColor"
+                            fill-rule="evenodd"
+                            clip-rule="evenodd"
+                            d="M9.813 3.172a.75.75 0 0 1 1.374 0l1.471 3.513 3.513 1.471a.75.75 0 0 1 0 1.374l-3.513 1.471-1.471 3.513a.75.75 0 0 1-1.374 0l-1.47-3.513-3.514-1.471a.75.75 0 0 1 0-1.374l3.513-1.471 1.471-3.513Zm7.137 5.878a.75.75 0 0 1 1.348 0l.68 1.62 1.62.679a.75.75 0 0 1 0 1.393l-1.62.68-.68 1.62a.75.75 0 0 1-1.393 0l-.68-1.62-1.62-.68a.75.75 0 0 1 0-1.392l1.62-.68.68-1.62Zm-12.95 4.99a.75.75 0 0 1 1.066-.223l.402.268.268.402a.75.75 0 1 1-1.289.844l-.268-.402-.402-.268a.75.75 0 0 1-.223-1.066Z"
+                        />
+                    </svg>
                     <span>"Predicción AI"</span>
                     {move || if current_view.get() == DashboardView::Prediction {
                         view! {
