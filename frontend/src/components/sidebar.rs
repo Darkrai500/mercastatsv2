@@ -161,8 +161,9 @@ pub fn Sidebar(
                     }
                     on:click=move |_| on_view_change.call(DashboardView::Prediction)
                 >
-                    <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                    <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3.5l1.8 3.6 3.9.6-2.85 2.85.67 3.95L12 12.9l-3.52 1.9.67-3.95L6.3 7.7l3.9-.6L12 3.5z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.5 15.5l1.2 1.2" />
                     </svg>
                     <span>"Predicción AI"</span>
                     {move || if current_view.get() == DashboardView::Prediction {

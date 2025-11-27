@@ -178,7 +178,11 @@ pub struct PredictionResponse {
 pub struct PredictionResult {
     pub timestamp: String,
     pub time_window_label: String,
+    pub time_window_range: String,
+    pub day_label: String,
     pub estimated_total: f64,
+    pub estimated_total_min: f64,
+    pub estimated_total_max: f64,
     pub confidence: f64,
     pub suggested_products: Vec<SuggestedProduct>,
     #[serde(default)]
