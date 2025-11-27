@@ -6,6 +6,42 @@ from datetime import datetime, timedelta
 import joblib
 import os
 
+
+def _compute_target_days(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute target_days_until_next from fecha_hora column.
+    
+    This function calculates the number of days between each ticket and the next one.
+    The last ticket in the sorted list will have NaN as there's no next visit.
+    
+    Args:
+        df: DataFrame with 'fecha_hora' column (ISO format strings or datetime)
+        
+    Returns:
+        DataFrame with 'target_days_until_next' column computed
+    """
+    if df.empty or 'fecha_hora' not in df.columns:
+        return df
+    
+    # Make a copy to avoid modifying the original
+    df = df.copy()
+    
+    # Convert fecha_hora to datetime if it's a string
+    df['_parsed_dt'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
+    
+    # Sort by datetime to compute days until next visit correctly
+    df = df.sort_values('_parsed_dt').reset_index(drop=True)
+    
+    # Compute days until next visit by shifting the datetime column
+    df['_next_dt'] = df['_parsed_dt'].shift(-1)
+    df['target_days_until_next'] = (df['_next_dt'] - df['_parsed_dt']).dt.total_seconds() / 86400
+    
+    # Clean up temporary columns
+    df = df.drop(columns=['_parsed_dt', '_next_dt'])
+    
+    return df
+
+
 class ShoppingPredictor:
     def __init__(self):
         self.model_next_visit = RandomForestRegressor(n_estimators=100, random_state=42)
@@ -25,40 +61,52 @@ class ShoppingPredictor:
         - total_last_30d
         - tickets_last_30d
         - is_payday_week
-        - target_days_until_next (calculated)
+        - target_days_until_next (calculated from fecha_hora if missing)
         - total (target for spend)
         """
         if ticket_features.empty:
             print("No data to train on.")
             return
 
-        # Prepare features for Next Visit Model
-        X = ticket_features[[
+        # Compute target_days_until_next if missing or all NaN
+        needs_target_computation = (
+            'target_days_until_next' not in ticket_features.columns
+            or ticket_features['target_days_until_next'].isna().all()
+        )
+        if needs_target_computation:
+            ticket_features = _compute_target_days(ticket_features)
+
+        feature_cols = [
             'day_of_week', 'hour_of_day', 'days_since_last_shop', 
             'total_last_30d', 'tickets_last_30d', 'is_payday_week'
-        ]]
-        
-        # Target for Next Visit: days until next shop
-        # We need to calculate this from the data if not present, but the plan says 
-        # we might calculate it here. Let's assume the input DF has it or we calculate it.
-        # For simplicity, let's assume the input dataframe is prepared with targets.
-        
-        if 'target_days_until_next' in ticket_features.columns:
-            y_next = ticket_features['target_days_until_next']
-            self.model_next_visit.fit(X, y_next)
-            
-            # Train Time Window Model (KNN)
-            # Target: hour_of_day of the NEXT visit
-            # We need to shift the target to be the next visit's hour
-            # But for simplicity in this initial version, let's assume we train on current patterns
-            # actually, the plan says: "Input: contexto temporal ... + salida del modelo de días"
-            # So we might need a more complex training setup.
-            # For now, let's train a simple classifier for hour based on current context
-            self.model_time_window.fit(X, ticket_features['hour_of_day']) 
+        ]
 
+        # Train Next Visit Model (requires valid target)
+        if 'target_days_until_next' in ticket_features.columns:
+            # Filter out rows with NaN targets (e.g., the last ticket has no next visit)
+            valid_mask = ticket_features['target_days_until_next'].notna()
+            df_valid = ticket_features[valid_mask]
+
+            if len(df_valid) >= 1:
+                X_next = df_valid[feature_cols]
+                y_next = df_valid['target_days_until_next']
+                self.model_next_visit.fit(X_next, y_next)
+
+                # Train Time Window Model (KNN) on the same valid rows
+                self.model_time_window.fit(X_next, df_valid['hour_of_day'])
+            else:
+                print("Not enough valid data to train next visit model.")
+
+        # Train Spend Model (uses all rows with valid total)
         if 'total' in ticket_features.columns:
-            y_spend = ticket_features['total']
-            self.model_spend.fit(X, y_spend)
+            spend_mask = ticket_features['total'].notna()
+            df_spend = ticket_features[spend_mask]
+            if len(df_spend) >= 1:
+                X_spend = df_spend[feature_cols]
+                y_spend = df_spend['total']
+                self.model_spend.fit(X_spend, y_spend)
+            else:
+                print("Not enough valid data to train spend model.")
 
         self.is_trained = True
         print("Models trained successfully.")
