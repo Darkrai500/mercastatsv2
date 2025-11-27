@@ -5,3 +5,8 @@ pandas
 joblib
 psycopg2-binary
 python-dotenv
+# OCR Dependencies
+pydantic-settings
+python-multipart
+pdfplumber
+loguru

@@ -13,15 +13,15 @@ const colors = {
 };
 
 const projectRoot = __dirname;
-const ocrDir = path.join(projectRoot, "ocr-service");
+const intelligenceDir = path.join(projectRoot, "intelligence-service");
 const backendDir = path.join(projectRoot, "backend");
 const frontendDir = path.join(projectRoot, "frontend");
 
 const cliArgs = new Set(process.argv.slice(2));
 const backendOnly = cliArgs.has("--backend-only");
 const frontendOnly = cliArgs.has("--frontend-only");
-const ocrOnly = cliArgs.has("--ocr-only");
-const noOcr = cliArgs.has("--no-ocr");
+const intelligenceOnly = cliArgs.has("--intelligence-only");
+const noIntelligence = cliArgs.has("--no-intelligence");
 const releaseMode = cliArgs.has("--release");
 
 if (backendOnly && frontendOnly) {
@@ -29,25 +29,25 @@ if (backendOnly && frontendOnly) {
   process.exit(1);
 }
 
-if (ocrOnly && noOcr) {
-  console.error("Cannot use --ocr-only and --no-ocr together.");
+if (intelligenceOnly && noIntelligence) {
+  console.error("Cannot use --intelligence-only and --no-intelligence together.");
   process.exit(1);
 }
 
 const commands = [];
 
-const runOcr = ocrOnly ? true : !noOcr;
-const runBackend = ocrOnly ? false : !frontendOnly;
-const runFrontend = ocrOnly ? false : !backendOnly;
+const runIntelligence = intelligenceOnly ? true : !noIntelligence;
+const runBackend = intelligenceOnly ? false : !frontendOnly;
+const runFrontend = intelligenceOnly ? false : !backendOnly;
 
-if (runOcr) {
+if (runIntelligence) {
   const pythonCmd = process.platform === "win32" ? "python" : "python3";
   commands.push({
-    name: "ocr",
+    name: "intelligence",
     cmd: pythonCmd,
-    args: ["-m", "uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "9000", "--reload"],
-    cwd: ocrDir,
-    color: colors.ocr,
+    args: ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8001", "--reload"],
+    cwd: intelligenceDir,
+    color: colors.ocr, // Reusing green color
   });
 }
 

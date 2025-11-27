@@ -30,7 +30,7 @@ impl AppConfig {
             .unwrap_or(8000);
 
         let intelligence_service_url = std::env::var("INTELLIGENCE_SERVICE_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:9000".to_string());
+            .unwrap_or_else(|_| "http://127.0.0.1:8001".to_string());
 
         let intelligence_api_key =
             std::env::var("INTELLIGENCE_API_KEY").ok().filter(|v| !v.is_empty());
