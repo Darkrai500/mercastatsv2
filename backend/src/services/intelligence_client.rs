@@ -79,6 +79,13 @@ impl IntelligenceClient {
         })
     }
 
+    pub async fn predict_next(
+        &self,
+        request: PredictRequest,
+    ) -> Result<PredictionResponse, IntelligenceClientError> {
+        self.post("/predict/next", &request).await
+    }
+
     async fn post<TRequest, TResponse>(
         &self,
         path: &str,
@@ -138,4 +145,48 @@ impl IntelligenceClient {
             builder
         }
     }
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct TicketFeature {
+    pub numero_factura: Option<String>,
+    pub fecha_hora: Option<String>,
+    pub total: Option<f64>,
+    pub day_of_week: i32,
+    pub day_of_month: i32,
+    pub hour_of_day: i32,
+    pub days_since_last_shop: f64,
+    pub total_last_30d: f64,
+    pub tickets_last_30d: i64,
+    pub is_payday_week: bool,
+}
+
+#[derive(Serialize, Debug)]
+pub struct PredictRequest {
+    pub user_id: String,
+    pub current_date: String,
+    pub features_now: TicketFeature,
+    pub history_features: Vec<TicketFeature>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+pub struct PredictionResponse {
+    pub prediction: PredictionResult,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+pub struct PredictionResult {
+    pub timestamp: String,
+    pub time_window_label: String,
+    pub estimated_total: f64,
+    pub confidence: f64,
+    pub suggested_products: Vec<SuggestedProduct>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+pub struct SuggestedProduct {
+    pub name: String,
+    pub probability: f64,
+    pub price_estimation: f64,
+    pub reason: String,
 }

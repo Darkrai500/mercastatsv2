@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod prediction;
 pub mod stats;
 pub mod tickets;
 

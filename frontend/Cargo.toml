@@ -15,6 +15,7 @@ leptos_meta = { version = "0.6", features = ["csr"] }
 # HTTP client
 reqwasm = "0.5"
 gloo-net = "0.5"
+gloo-timers = { version = "0.3", features = ["futures"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

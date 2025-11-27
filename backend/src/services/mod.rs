@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod intelligence;
 pub mod intelligence_client;
 pub mod ocr;
 pub mod ticket_ingestion;
