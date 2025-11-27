@@ -1,6 +1,5 @@
 use chrono::{Datelike, Timelike, Utc};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::services::intelligence_client::{
     IntelligenceClient, PredictRequest, PredictionResponse, TicketFeature,
@@ -19,7 +18,7 @@ impl IntelligenceService {
 
     pub async fn get_next_shop_prediction(
         &self,
-        user_id: Uuid,
+        user_id: String,
         user_email: String,
     ) -> Result<PredictionResponse, anyhow::Error> {
         // 1. Fetch history features from DB View
@@ -31,13 +30,13 @@ impl IntelligenceService {
                 numero_factura,
                 to_char(fecha_hora, 'YYYY-MM-DD"T"HH24:MI:SS') as "fecha_hora?",
                 total::float8 as "total?",
-                day_of_week::int4 as day_of_week,
-                day_of_month::int4 as day_of_month,
-                hour_of_day::int4 as hour_of_day,
-                days_since_last_shop::float8 as days_since_last_shop,
-                total_last_30d::float8 as total_last_30d,
-                tickets_last_30d,
-                is_payday_week
+                COALESCE(day_of_week::int4, 0) as "day_of_week!",
+                COALESCE(day_of_month::int4, 1) as "day_of_month!",
+                COALESCE(hour_of_day::int4, 12) as "hour_of_day!",
+                COALESCE(days_since_last_shop::float8, 0.0) as "days_since_last_shop!",
+                COALESCE(total_last_30d::float8, 0.0) as "total_last_30d!",
+                COALESCE(tickets_last_30d, 0) as "tickets_last_30d!",
+                COALESCE(is_payday_week, false) as "is_payday_week!"
             FROM ml_ticket_features
             WHERE usuario_email = $1
             ORDER BY fecha_hora DESC
@@ -95,7 +94,7 @@ impl IntelligenceService {
 
         // 3. Call Python Service
         let req = PredictRequest {
-            user_id: user_id.to_string(),
+            user_id: user_id,
             current_date: now.to_rfc3339(),
             features_now,
             history_features: history,

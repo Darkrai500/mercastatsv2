@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::time::sleep;
 
@@ -181,6 +181,8 @@ pub struct PredictionResult {
     pub estimated_total: f64,
     pub confidence: f64,
     pub suggested_products: Vec<SuggestedProduct>,
+    #[serde(default)]
+    pub learning_mode: bool,
 }
 
 #[derive(Deserialize, Debug, Serialize)]

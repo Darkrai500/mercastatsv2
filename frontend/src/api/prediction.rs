@@ -17,6 +17,8 @@ pub struct PredictionResult {
     pub estimated_total: f64,
     pub confidence: f64,
     pub suggested_products: Vec<SuggestedProduct>,
+    #[serde(default)]
+    pub learning_mode: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

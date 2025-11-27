@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/ocr", routes::ocr_router(state.clone()))
         .nest("/api/tickets", routes::tickets_router(state.clone()))
         .nest("/api/stats", routes::stats_router(state.clone()))
-        .nest("/api/predict", routes::intelligence_router(state.clone()))
+        .nest("/api/predict", routes::intelligence::intelligence_router(state.clone()))
         .layer(CorsLayer::permissive());
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;

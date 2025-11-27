@@ -9,6 +9,7 @@ use crate::{
     services::{intelligence::IntelligenceService, intelligence_client::PredictionResponse},
 };
 use super::auth::AppState;
+use crate::error::AppError;
 
 /// Handler to get next shop prediction
 pub async fn get_next_prediction(
@@ -17,9 +18,11 @@ pub async fn get_next_prediction(
 ) -> AppResult<Json<PredictionResponse>> {
     let service = IntelligenceService::new(state.db_pool.clone(), state.intelligence_client.clone());
     
+    // Use email as user_id since we don't have a separate UUID
     let prediction = service
-        .get_next_shop_prediction(auth_user.user_id, auth_user.email)
-        .await?;
+        .get_next_shop_prediction(auth_user.email.clone(), auth_user.email)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
 
     Ok(Json(prediction))
 }

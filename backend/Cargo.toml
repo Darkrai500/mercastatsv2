@@ -44,3 +44,6 @@ anyhow = "1.0"
 
 # HTTP client para servicios externos
 reqwest = { version = "0.11", features = ["json", "multipart"] }
+
+# UUID
+uuid = { version = "1.0", features = ["serde", "v4"] }

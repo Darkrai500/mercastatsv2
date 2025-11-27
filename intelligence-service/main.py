@@ -209,16 +209,28 @@ async def predict_next(request: PredictRequest):
     
     # 3. Format response
     current_dt = datetime.fromisoformat(request.current_date)
-    predicted_date = current_dt + timedelta(days=result['days_until'])
+    
+    days_until = result['days_until']
+    if pd.isna(days_until):
+        logger.warning("Prediccion de dias es NaN, usando valor por defecto (7 dias)")
+        days_until = 7.0
+        
+    predicted_date = current_dt + timedelta(days=days_until)
     predicted_date = predicted_date.replace(hour=result['predicted_hour'], minute=0, second=0)
     
+    # Determine learning mode
+    learning_mode = False
+    if request.history_features and len(request.history_features) < 15:
+        learning_mode = True
+
     return {
         "prediction": {
             "timestamp": predicted_date.isoformat(),
             "time_window_label": f"Estimated around {result['predicted_hour']}:00",
             "estimated_total": round(result['predicted_spend'], 2),
             "confidence": 0.85, # Placeholder
-            "suggested_products": [] # Placeholder for now
+            "suggested_products": [], # Placeholder for now
+            "learning_mode": learning_mode
         }
     }
 
