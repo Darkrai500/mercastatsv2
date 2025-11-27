@@ -6,6 +6,7 @@ pub enum DashboardView {
     History,
     Stats,
     MonthlyEvolution,
+    Prediction,
 }
 
 #[component]
@@ -140,6 +141,35 @@ pub fn Sidebar(
                     </svg>
                     <span>"Evolución mensual"</span>
                     {move || if current_view.get() == DashboardView::MonthlyEvolution {
+                        view! {
+                            <div class="ml-auto w-1.5 h-1.5 bg-primary-600 rounded-full"></div>
+                        }.into_view()
+                    } else {
+                        view! {}.into_view()
+                    }}
+                </button>
+
+                // Opción: Predicción Next Shop
+                <button
+                    class=move || {
+                        let base = "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all";
+                        if current_view.get() == DashboardView::Prediction {
+                            format!("{} bg-primary-50 text-primary-700", base)
+                        } else {
+                            format!("{} text-gray-700 hover:bg-gray-100 hover:text-gray-900", base)
+                        }
+                    }
+                    on:click=move |_| on_view_change.call(DashboardView::Prediction)
+                >
+                    <img
+                        src="/icono-estrella.png?v=2"
+                        alt=""
+                        class="w-5 h-5 object-contain flex-shrink-0"
+                        loading="lazy"
+                        draggable="false"
+                    />
+                    <span>"Predicción AI"</span>
+                    {move || if current_view.get() == DashboardView::Prediction {
                         view! {
                             <div class="ml-auto w-1.5 h-1.5 bg-primary-600 rounded-full"></div>
                         }.into_view()

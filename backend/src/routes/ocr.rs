@@ -1,4 +1,5 @@
 use axum::{extract::State, routing::post, Json, Router};
+use reqwest::StatusCode as ReqStatusCode;
 use serde::Serialize;
 use validator::Validate;
 
@@ -7,7 +8,9 @@ use crate::{
     error::{AppError, AppResult},
     middleware::AuthenticatedUser,
     schema::TicketProcessPayload,
-    services::{ingest_ticket, process_ticket_ocr, OcrError, TicketIngestionResponse},
+    services::{
+        ingest_ticket, IntelligenceClientError, OcrProcessTicketResponse, TicketIngestionResponse,
+    },
 };
 
 /// Respuesta combinada del procesamiento y la ingesta del ticket.
@@ -58,13 +61,17 @@ pub async fn process_ticket(
     );
 
     // Clonar datos necesarios antes de consumir el payload
-    let pdf_b64 = payload.pdf_b64.clone();
+    let file_content_b64 = payload.file_content_b64.clone();
     let file_name = payload.file_name.clone();
     let usuario_email = payload.usuario_email.clone();
 
     // 1. Ejecutar OCR
     let request = payload.into();
-    let ocr_result = process_ticket_ocr(request).await.map_err(map_ocr_error)?;
+    let ocr_result = state
+        .intelligence_client
+        .process_ticket(request)
+        .await
+        .map_err(map_intelligence_error)?;
     log_ocr_result(&ocr_result);
 
     // 2. Ingestar ticket si el usuario lo solicito
@@ -74,7 +81,7 @@ pub async fn process_ticket(
         match ingest_ticket(
             &state.db_pool,
             &email,
-            &pdf_b64,
+            &file_content_b64,
             &file_name,
             ocr_result.clone(),
         )
@@ -113,7 +120,7 @@ pub async fn process_ticket(
 }
 
 /// Logging estructurado del resultado del OCR para facilitar depuracion.
-fn log_ocr_result(result: &crate::services::OcrProcessTicketResponse) {
+fn log_ocr_result(result: &OcrProcessTicketResponse) {
     tracing::info!("OCR completado para ticket {}", result.ticket_id);
 
     if let Some(ref factura) = result.numero_factura {
@@ -157,21 +164,29 @@ fn log_ocr_result(result: &crate::services::OcrProcessTicketResponse) {
     }
 }
 
-fn map_ocr_error(err: OcrError) -> AppError {
+fn map_intelligence_error(err: IntelligenceClientError) -> AppError {
     match err {
-        OcrError::Parsing(message) => AppError::BadRequest(message),
-        OcrError::Python(message) => {
-            tracing::error!("Error Python durante OCR: {}", message);
-            AppError::InternalError("Fallo en el motor OCR".to_string())
+        IntelligenceClientError::Timeout | IntelligenceClientError::ServiceUnavailable => {
+            AppError::ServiceUnavailable("Servicio de inteligencia no disponible".to_string())
         }
-        OcrError::Deserialize(error) => {
-            tracing::error!("Error de deserializacion OCR: {}", error);
-            AppError::InternalError("Respuesta OCR invalida".to_string())
+        IntelligenceClientError::UnexpectedStatus { status, body } => {
+            if status == ReqStatusCode::BAD_REQUEST || status == ReqStatusCode::UNPROCESSABLE_ENTITY
+            {
+                AppError::BadRequest(body)
+            } else {
+                AppError::InternalError(format!(
+                    "Fallo en el servicio de inteligencia ({}): {}",
+                    status, body
+                ))
+            }
         }
-        OcrError::Join(error) => {
-            tracing::error!("Error al ejecutar OCR en hilo bloqueante: {}", error);
-            AppError::InternalError("Error interno del servidor".to_string())
+        IntelligenceClientError::Deserialize(message) => {
+            AppError::InternalError(format!("Respuesta OCR invalida: {}", message))
         }
+        IntelligenceClientError::Request(err) => AppError::InternalError(format!(
+            "No se pudo contactar con el servicio de inteligencia: {}",
+            err
+        )),
     }
 }
 

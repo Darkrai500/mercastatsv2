@@ -18,7 +18,7 @@ Este servicio es responsable de:
 ```
 Backend Rust (Axum)
        ↓
-   HTTP POST /process-ticket
+   HTTP POST /ocr/process
        ↓
 OCR Service (FastAPI)
        ↓
@@ -105,7 +105,7 @@ Health check del servicio.
 }
 ```
 
-### `POST /process-ticket`
+### `POST /ocr/process`
 
 Procesa un ticket PDF y extrae información.
 
@@ -114,7 +114,7 @@ Procesa un ticket PDF y extrae información.
 {
   "ticket_id": "550e8400-e29b-41d4-a716-446655440000",
   "file_name": "ticket_mercadona.pdf",
-  "pdf_b64": "JVBERi0xLjQKJeLjz9MKMy4..."
+  "file_content_b64": "JVBERi0xLjQKJeLjz9MKMy4..."
 }
 ```
 
@@ -150,11 +150,11 @@ $base64 = [System.Convert]::ToBase64String($bytes)
 $json = @{
     ticket_id = "test-123"
     file_name = "ticket_test.pdf"
-    pdf_b64 = $base64
+    file_content_b64 = $base64
 } | ConvertTo-Json
 
 # 3. Enviar request
-Invoke-RestMethod -Uri "http://127.0.0.1:9000/process-ticket" -Method POST -Body $json -ContentType "application/json"
+Invoke-RestMethod -Uri "http://127.0.0.1:9000/ocr/process" -Method POST -Body $json -ContentType "application/json"
 ```
 
 ### Con Python
@@ -165,15 +165,15 @@ import requests
 
 # Leer PDF y convertir a base64
 with open("docs/20230810 Mercadona 52,11 €.pdf", "rb") as f:
-    pdf_b64 = base64.b64encode(f.read()).decode("utf-8")
+    file_content_b64 = base64.b64encode(f.read()).decode("utf-8")
 
 # Enviar request
 response = requests.post(
-    "http://127.0.0.1:9000/process-ticket",
+    "http://127.0.0.1:9000/ocr/process",
     json={
         "ticket_id": "test-123",
         "file_name": "ticket_test.pdf",
-        "pdf_b64": pdf_b64
+        "file_content_b64": file_content_b64
     }
 )
 

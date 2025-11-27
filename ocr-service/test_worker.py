@@ -1,9 +1,7 @@
 """
 Script de prueba para el worker OCR.
 
-Itera por todos los PDF disponibles en la carpeta ../docs,
-los envía al endpoint /process-ticket y muestra por consola
-toda la información extraída.
+Recorre los PDF en ../docs, los envia a /ocr/process y muestra la respuesta.
 """
 
 import base64
@@ -16,7 +14,7 @@ import httpx
 
 BASE_DIR = Path(__file__).resolve().parent
 PDF_DIRS = [BASE_DIR.parent / "docs"]
-API_URL = "http://127.0.0.1:9000/process-ticket"
+API_URL = "http://127.0.0.1:9000/ocr/process"
 
 
 def iter_pdf_files() -> Iterable[Path]:
@@ -103,7 +101,7 @@ def main() -> None:
         payload = {
             "ticket_id": ticket_id,
             "file_name": pdf_path.name,
-            "pdf_b64": pdf_to_base64(pdf_path),
+            "file_content_b64": pdf_to_base64(pdf_path),
         }
 
         try:
@@ -127,4 +125,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

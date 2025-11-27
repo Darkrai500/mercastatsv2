@@ -6,18 +6,22 @@ const path = require("node:path");
 
 const RESET = "\x1b[0m";
 const colors = {
+  ocr: "\x1b[32m", // green
   backend: "\x1b[35m", // magenta
   frontend: "\x1b[36m", // cyan
   info: "\x1b[33m", // yellow
 };
 
 const projectRoot = __dirname;
+const intelligenceDir = path.join(projectRoot, "intelligence-service");
 const backendDir = path.join(projectRoot, "backend");
 const frontendDir = path.join(projectRoot, "frontend");
 
 const cliArgs = new Set(process.argv.slice(2));
 const backendOnly = cliArgs.has("--backend-only");
 const frontendOnly = cliArgs.has("--frontend-only");
+const intelligenceOnly = cliArgs.has("--intelligence-only");
+const noIntelligence = cliArgs.has("--no-intelligence");
 const releaseMode = cliArgs.has("--release");
 
 if (backendOnly && frontendOnly) {
@@ -25,9 +29,29 @@ if (backendOnly && frontendOnly) {
   process.exit(1);
 }
 
+if (intelligenceOnly && noIntelligence) {
+  console.error("Cannot use --intelligence-only and --no-intelligence together.");
+  process.exit(1);
+}
+
 const commands = [];
 
-if (!frontendOnly) {
+const runIntelligence = intelligenceOnly ? true : !noIntelligence;
+const runBackend = intelligenceOnly ? false : !frontendOnly;
+const runFrontend = intelligenceOnly ? false : !backendOnly;
+
+if (runIntelligence) {
+  const pythonCmd = process.platform === "win32" ? "python" : "python3";
+  commands.push({
+    name: "intelligence",
+    cmd: pythonCmd,
+    args: ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8001", "--reload"],
+    cwd: intelligenceDir,
+    color: colors.ocr, // Reusing green color
+  });
+}
+
+if (runBackend) {
   const backendArgs = ["run"];
   if (releaseMode) {
     backendArgs.push("--release");
@@ -42,7 +66,7 @@ if (!frontendOnly) {
   });
 }
 
-if (!backendOnly) {
+if (runFrontend) {
   commands.push({
     name: "frontend",
     cmd: "trunk",

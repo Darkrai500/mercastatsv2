@@ -6,7 +6,7 @@ use crate::{
     db,
     error::AppResult,
     schema::{AuthResponse, LoginRequest, RegisterRequest, UserInfo},
-    services::{generate_jwt, hash_password, verify_password},
+    services::{generate_jwt, hash_password, verify_password, IntelligenceClient},
 };
 
 /// Estado compartido del servidor
@@ -14,6 +14,7 @@ use crate::{
 pub struct AppState {
     pub db_pool: PgPool,
     pub config: AppConfig,
+    pub intelligence_client: IntelligenceClient,
 }
 
 /// Handler para registro de usuario

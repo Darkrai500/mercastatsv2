@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod intelligence;
 pub mod ocr;
 pub mod stats;
 pub mod tickets;

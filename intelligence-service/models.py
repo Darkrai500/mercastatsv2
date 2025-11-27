@@ -131,48 +131,5 @@ class HealthResponse(BaseModel):
     """
 
     status: str = Field(default="ok")
-    service: str = Field(default="ocr-service")
+    service: str = Field(default="intelligence-service")
     version: str = Field(default="1.0.0")
-
-
-class UserContext(BaseModel):
-    """Contexto b sico del usuario para predicci¢n futura."""
-
-    current_time: datetime = Field(..., description="Fecha/hora actual en ISO 8601")
-    is_weekend: bool = Field(default=False, description="Indica si es fin de semana")
-
-
-class PurchaseHistoryItem(BaseModel):
-    """Resumen de una compra previa (placeholder para el modelo ML futuro)."""
-
-    store: Optional[str] = Field(None, description="Nombre de la tienda")
-    total_spent: Optional[float] = Field(None, description="Total gastado en la compra")
-    items_count: Optional[int] = Field(None, description="N£mero de productos comprados")
-    timestamp: Optional[datetime] = Field(None, description="Fecha de la compra")
-
-
-class PredictNextShopRequest(BaseModel):
-    """Payload inicial para el endpoint de predicci¢n (placeholder)."""
-
-    user_context: UserContext
-    purchase_history_summary: List[PurchaseHistoryItem] = Field(
-        default_factory=list,
-        description="Compras resumidas recientes",
-    )
-
-
-class PredictNextShopResponse(BaseModel):
-    """Respuesta placeholder mientras se integra el modelo ML real."""
-
-    ready: bool = Field(
-        default=False,
-        description="Indica si hay un modelo entrenado disponible",
-    )
-    message: str = Field(
-        default="Modelo ML no entrenado todav¡a",
-        description="Detalle del estado del servicio de inteligencia",
-    )
-    model_version: Optional[str] = Field(
-        default=None,
-        description="Versi¢n del modelo si estuviera disponible",
-    )

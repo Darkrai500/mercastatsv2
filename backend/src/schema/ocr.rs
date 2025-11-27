@@ -10,10 +10,11 @@ pub struct TicketProcessPayload {
     pub ticket_id: String,
     #[validate(length(min = 1, message = "file_name es requerido"))]
     pub file_name: String,
-    #[validate(length(min = 1, message = "pdf_b64 es requerido"))]
-    pub pdf_b64: String,
-    /// Email del usuario (temporal hasta que se implemente autenticación JWT)
-    #[validate(email(message = "usuario_email debe ser un email válido"))]
+    #[serde(alias = "pdf_b64")]
+    #[validate(length(min = 1, message = "file_content_b64 es requerido"))]
+    pub file_content_b64: String,
+    /// Email del usuario (temporal hasta que se implemente autenticacion JWT)
+    #[validate(email(message = "usuario_email debe ser un email valido"))]
     pub usuario_email: Option<String>,
 }
 
@@ -22,7 +23,7 @@ impl From<TicketProcessPayload> for OcrProcessTicketRequest {
         OcrProcessTicketRequest {
             ticket_id: value.ticket_id,
             file_name: value.file_name,
-            pdf_b64: value.pdf_b64,
+            file_content_b64: value.file_content_b64,
         }
     }
 }

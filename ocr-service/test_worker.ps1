@@ -13,13 +13,13 @@ Write-Host "PDF convertido a base64. Tamaño: $($bytes.Length) bytes" -Foregroun
 $body = @{
     ticket_id = "test-123-456"
     file_name = "ticket_mercadona_test.pdf"
-    pdf_b64 = $base64
+    file_content_b64 = $base64
 } | ConvertTo-Json
 
-Write-Host "`nEnviando request a http://127.0.0.1:9000/process-ticket..." -ForegroundColor Cyan
+Write-Host "`nEnviando request a http://127.0.0.1:9000/ocr/process..." -ForegroundColor Cyan
 
 try {
-    $response = Invoke-RestMethod -Uri "http://127.0.0.1:9000/process-ticket" -Method POST -Body $body -ContentType "application/json"
+    $response = Invoke-RestMethod -Uri "http://127.0.0.1:9000/ocr/process" -Method POST -Body $body -ContentType "application/json"
 
     Write-Host "`n✅ SUCCESS!" -ForegroundColor Green
     Write-Host "==================== RESPUESTA ====================" -ForegroundColor Yellow

@@ -1,13 +1,14 @@
 # FastAPI y servidor
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
+gunicorn==21.2.0
 
 # Validación de datos
 pydantic==2.9.2
 pydantic-settings==2.6.0
 
-# Procesamiento de archivos
-python-multipart==0.0.12
+# Procesamiento de archivos (actualizado por CVE boundary DoS fix)
+python-multipart==0.0.18
 
 # Extracción de texto de PDFs
 pdfplumber==0.11.4
@@ -20,3 +21,9 @@ loguru==0.7.2
 
 # Utilidades
 python-dotenv==1.0.1
+
+# ML / Ciencia de datos (placeholder para futuros modelos)
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.5.2
+joblib==1.4.2

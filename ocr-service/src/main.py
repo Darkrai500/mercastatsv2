@@ -3,17 +3,24 @@ FastAPI application para el worker OCR de Mercastats.
 
 Endpoints:
     - GET /health: Health check
-    - POST /process-ticket: Procesa un ticket PDF y devuelve datos estructurados
+    - POST /ocr/process: Procesa un ticket PDF y devuelve datos estructurados
+    - POST /predict/next-shop: Placeholder para la predicci¢n (ML futuro)
 """
 
 import sys
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from .models import HealthResponse, ProcessTicketRequest
+from .models import (
+    HealthResponse,
+    PredictNextShopRequest,
+    PredictNextShopResponse,
+    ProcessTicketRequest,
+    ProcessTicketResponse,
+)
 from .processor import PDFParsingError, process_ticket_response
 
 
@@ -83,18 +90,22 @@ async def health_check():
     return HealthResponse(status="ok", service="ocr-service", version="1.0.0")
 
 
-@app.post("/process-ticket", response_model=ProcessTicketResponse, tags=["OCR"])
+@app.post("/ocr/process", response_model=ProcessTicketResponse, tags=["OCR"])
 async def process_ticket(request: ProcessTicketRequest):
     """
     Procesa un ticket PDF y extrae informacion estructurada.
     """
-    logger.info("Procesando ticket %s | archivo=%s", request.ticket_id, request.file_name)
+    logger.info(
+        "Procesando ticket {} | archivo={}",
+        request.ticket_id,
+        request.file_name,
+    )
 
     try:
         response = process_ticket_response(
             ticket_id=request.ticket_id,
             file_name=request.file_name,
-            pdf_b64=request.pdf_b64,
+            pdf_b64=request.file_content_b64,
         )
 
         fecha_repr = (
@@ -104,7 +115,7 @@ async def process_ticket(request: ProcessTicketRequest):
         )
 
         logger.success(
-            "Ticket procesado | factura=%s | fecha=%s | total=%s | productos=%s",
+            "Ticket procesado | factura={} | fecha={} | total={} | productos={}",
             response.numero_factura,
             fecha_repr,
             response.total,
@@ -114,17 +125,37 @@ async def process_ticket(request: ProcessTicketRequest):
         return response
 
     except PDFParsingError as exc:
-        logger.error("Error de parsing: %s", exc)
+        logger.error("Error de parsing: {}", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"No se pudo procesar el PDF: {exc}",
         ) from exc
     except Exception as exc:
-        logger.exception("Error inesperado: %s", exc)
+        logger.exception("Error inesperado: {}", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {exc}",
         ) from exc
+
+
+@app.post(
+    "/predict/next-shop",
+    response_model=PredictNextShopResponse,
+    tags=["ML"],
+    summary="Placeholder de predicci¢n de compra futura",
+)
+async def predict_next_shop(request: PredictNextShopRequest):
+    """
+    Endpoint placeholder que deja preparado el contrato para el modelo ML futuro.
+    """
+    logger.info("Solicitud de predicci¢n recibida (placeholder)")
+    _ = request  # Evitar warning por variable sin usar hasta integrar el modelo real
+
+    return PredictNextShopResponse(
+        ready=False,
+        message="Modelo de predicci¢n no entrenado todav¡a",
+        model_version=None,
+    )
 
 
 # ============================================================================
@@ -133,9 +164,9 @@ async def process_ticket(request: ProcessTicketRequest):
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
+async def global_exception_handler(request: Request, exc: Exception):
     """Handler global para excepciones no capturadas."""
-    logger.exception("Excepcion no capturada: %s", exc)
+    logger.exception("Excepcion no capturada: {}", exc)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Error interno del servidor"},

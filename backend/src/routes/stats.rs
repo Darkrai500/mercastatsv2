@@ -130,7 +130,7 @@ pub async fn get_monthly_evolution(
         0.0
     };
 
-    let current_year = chrono::Utc::now().format("%Y").to_string();
+    let _current_year = chrono::Utc::now().format("%Y").to_string();
     // Obtener el total real del año desde la BD (no depende de months_data)
     let year_to_date_total = get_current_year_total(&state.db_pool, &user_email).await?;
 

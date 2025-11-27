@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
-from .models import ProcessTicketRequest, ProcessTicketResponse
-from .services import PDFParsingError, parse_ticket
+from models import ProcessTicketRequest, ProcessTicketResponse
+from services import PDFParsingError, parse_ticket
 
 
 def process_ticket_response(
