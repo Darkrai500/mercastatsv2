@@ -34,10 +34,12 @@ class TestComputeTargetDays:
         result = _compute_target_days(df)
 
         assert 'target_days_until_next' in result.columns
-        # First ticket: ~2.17 days until next (2 days + 4 hours)
-        assert abs(result.iloc[0]['target_days_until_next'] - 2.166666666) < 0.01
-        # Second ticket: ~6.79 days until next (7 days - 5 hours)
-        assert abs(result.iloc[1]['target_days_until_next'] - 6.791666666) < 0.01
+        # First ticket to second: 2 days + 4 hours = 2 + 4/24 = 2.1667 days
+        expected_first = 2 + 4 / 24
+        assert abs(result.iloc[0]['target_days_until_next'] - expected_first) < 0.01
+        # Second ticket to third: 6 days + 19 hours = 6 + 19/24 = 6.7917 days
+        expected_second = 6 + 19 / 24
+        assert abs(result.iloc[1]['target_days_until_next'] - expected_second) < 0.01
         # Last ticket has no next visit
         assert pd.isna(result.iloc[2]['target_days_until_next'])
 

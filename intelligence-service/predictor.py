@@ -34,7 +34,8 @@ def _compute_target_days(df: pd.DataFrame) -> pd.DataFrame:
     
     # Compute days until next visit by shifting the datetime column
     df['_next_dt'] = df['_parsed_dt'].shift(-1)
-    df['target_days_until_next'] = (df['_next_dt'] - df['_parsed_dt']).dt.total_seconds() / 86400
+    df['target_days_until_next'] = (df['_next_dt'] - df['_parsed_dt']).dt.days + \
+                                   (df['_next_dt'] - df['_parsed_dt']).dt.seconds / (24 * 60 * 60)
     
     # Clean up temporary columns
     df = df.drop(columns=['_parsed_dt', '_next_dt'])
