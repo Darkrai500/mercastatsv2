@@ -22,25 +22,10 @@ pub fn PredictionCard(
                     "Tu próxima visita será " <span class="text-primary-700">{prediction.day_label.clone()}</span>
                     {format!(", entre {}", prediction.time_window_range)}
                 </h2>
-                <p class="text-sm text-gray-600">
-                    "Ventana estimada: " {prediction.time_window_label.clone()}
-                </p>
                 <p class="text-xs text-gray-500">
                     {"Fecha exacta: "} {formatted_date.clone()}
                 </p>
             </header>
-
-            <div class="flex flex-wrap gap-3 items-center bg-primary-50/70 border border-primary-100 rounded-xl px-4 py-3">
-                <div class="flex items-center gap-2 text-primary-800 font-semibold">
-                    <span class="text-lg">"Ticket estimado"</span>
-                    <span class="px-3 py-1 bg-white rounded-lg shadow-sm text-primary-700">
-                        {format!("{:.2}€ - {:.2}€", prediction.estimated_total_min, prediction.estimated_total_max)}
-                    </span>
-                </div>
-                <span class="text-xs text-primary-700/80 font-medium px-2 py-1 rounded-lg bg-white/70">
-                    {format!("Punto medio: {:.2}€", prediction.estimated_total)}
-                </span>
-            </div>
 
             <div class="space-y-6">
                 <div>
@@ -59,13 +44,17 @@ pub fn PredictionCard(
                                                     {format!("{:.0}%", product.probability * 100.0)}
                                                 </span>
                                             </div>
-                                            <p class="text-xs text-gray-500 mb-3">{product.reason}</p>
-                                            <div class="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                                                <span class="px-2 py-1 rounded-lg bg-primary-50 text-primary-700">
-                                                    {format!("{:.2}€", product.price_estimation)}
-                                                </span>
-                                                <span class="text-gray-500 text-xs">"estimado"</span>
-                                            </div>
+                                            <p class="text-xs text-gray-500 mb-1">{product.reason}</p>
+                                            {move || if product.price_estimation > 0.0 {
+                                                view! {
+                                                    <div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary-50 text-primary-700 text-xs font-semibold">
+                                                        <span>{"Precio medio ticket:"}</span>
+                                                        <span>{format!("{:.2}€", product.price_estimation)}</span>
+                                                    </div>
+                                                }.into_view()
+                                            } else {
+                                                view! { <></> }.into_view()
+                                            }}
                                         </div>
                                     }
                                 }).collect::<Vec<_>>()}

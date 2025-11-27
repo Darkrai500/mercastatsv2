@@ -1,8 +1,11 @@
 use chrono::{Datelike, Timelike, Utc};
 use sqlx::PgPool;
 
-use crate::services::intelligence_client::{
-    IntelligenceClient, PredictRequest, PredictionResponse, TicketFeature,
+use crate::{
+    db::stats::get_top_products_by_quantity,
+    services::intelligence_client::{
+        IntelligenceClient, PredictRequest, PredictionResponse, SuggestedProduct, TicketFeature,
+    },
 };
 
 #[derive(Clone)]
@@ -100,7 +103,54 @@ impl IntelligenceService {
             history_features: history,
         };
 
-        let response = self.client.predict_next(req).await?;
+        let mut response = self.client.predict_next(req).await?;
+
+        // Reemplazar/inyectar siempre con productos reales del usuario
+        let top_products = get_top_products_by_quantity(&self.pool, &user_email, 6).await?;
+        tracing::info!(
+            "Prediccion productos | usuario={} | top_items={}",
+            user_email,
+            top_products.len()
+        );
+
+        if !top_products.is_empty() {
+            let max_qty = top_products
+                .iter()
+                .filter_map(|p| p.cantidad_total)
+                .max()
+                .unwrap_or(1) as f64;
+
+            let suggestions: Vec<SuggestedProduct> = top_products
+                .into_iter()
+                .map(|p| {
+                    let qty = p.cantidad_total.unwrap_or(1) as f64;
+                    let probability = if max_qty > 0.0 { qty / max_qty } else { 0.5 };
+                    let price = p
+                        .precio_medio
+                        .as_ref()
+                        .and_then(|d| d.to_string().parse::<f64>().ok())
+                        .unwrap_or(0.0);
+
+                    SuggestedProduct {
+                        name: p.nombre,
+                        probability,
+                        price_estimation: price,
+                        reason: format!(
+                            "Frecuencia alta en tus tickets ({} unidades históricas)",
+                            qty as i64
+                        ),
+                    }
+                })
+                .collect();
+
+            response.prediction.suggested_products = suggestions;
+        } else {
+            tracing::warn!(
+                "Prediccion productos | usuario={} | sin historial de productos, devolviendo lista vacía",
+                user_email
+            );
+            response.prediction.suggested_products = Vec::new();
+        }
 
         Ok(response)
     }

@@ -44,12 +44,13 @@ logger.add(
 )
 
 # ============================================================================
-# MODELOS ML (Definidos aquí por simplicidad o migrar a models.py si crece)
+# MODELOS ML
 # ============================================================================
+
 
 class TicketFeature(BaseModel):
     numero_factura: Optional[str]
-    fecha_hora: Optional[str] # ISO format
+    fecha_hora: Optional[str]  # ISO format
     total: Optional[float]
     day_of_week: int
     day_of_month: int
@@ -58,14 +59,15 @@ class TicketFeature(BaseModel):
     total_last_30d: float
     tickets_last_30d: int
     is_payday_week: bool
-    # Targets for training (optional in inference)
     target_days_until_next: Optional[float] = None
+
 
 class PredictRequest(BaseModel):
     user_id: str
     current_date: str
     features_now: TicketFeature
     history_features: List[TicketFeature]
+
 
 class PredictionResponse(BaseModel):
     timestamp: str
@@ -78,25 +80,26 @@ class PredictionResponse(BaseModel):
     confidence: float
     suggested_products: List[dict]
 
+
 # ============================================================================
 # LIFECYCLE EVENTS
 # ============================================================================
 
 predictor = None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Gestiona el ciclo de vida de la aplicacion FastAPI."""
     global predictor
     logger.info("Iniciando Intelligence Service (OCR + ML)...")
-    logger.info("Cargando modelo de predicción...")
     predictor = ShoppingPredictor.load()
-    logger.info(f"Modelo cargado: {predictor.is_trained}")
+    logger.info("Modelo cargado en arranque | is_trained=%s", predictor.is_trained)
     yield
     logger.info("Deteniendo Intelligence Service...")
 
+
 # ============================================================================
-# APLICACION FASTAPI
+# APP
 # ============================================================================
 
 app = FastAPI(
@@ -114,37 +117,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Redirige a /health."""
     return {"message": "Intelligence Service running. Check /health for status."}
+
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check():
-    """Health check endpoint."""
     logger.info("Health check requested")
-    return HealthResponse(
-        status="ok", 
-        service="intelligence-service", 
-        version="2.0.0"
-    )
+    return HealthResponse(status="ok", service="intelligence-service", version="2.0.0")
+
 
 # --- OCR ENDPOINTS ---
 
+
 @app.post("/ocr/process", response_model=ProcessTicketResponse, tags=["OCR"])
 async def process_ticket(request: ProcessTicketRequest):
-    """
-    Procesa un ticket PDF y extrae informacion estructurada.
-    """
-    logger.info(
-        "Procesando ticket {} | archivo={}",
-        request.ticket_id,
-        request.file_name,
-    )
+    logger.info("Procesando ticket %s | archivo=%s", request.ticket_id, request.file_name)
 
     try:
         response = process_ticket_response(
@@ -160,7 +154,7 @@ async def process_ticket(request: ProcessTicketRequest):
         )
 
         logger.success(
-            "Ticket procesado | factura={} | fecha={} | total={} | productos={}",
+            "Ticket procesado | factura=%s | fecha=%s | total=%s | productos=%s",
             response.numero_factura,
             fecha_repr,
             response.total,
@@ -170,59 +164,77 @@ async def process_ticket(request: ProcessTicketRequest):
         return response
 
     except PDFParsingError as exc:
-        logger.error("Error de parsing: {}", exc)
+        logger.error("Error de parsing: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"No se pudo procesar el PDF: {exc}",
         ) from exc
     except Exception as exc:
-        logger.exception("Error inesperado: {}", exc)
+        logger.exception("Error inesperado: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {exc}",
         ) from exc
 
+
 # --- ML ENDPOINTS ---
+
 
 @app.post("/predict/next", response_model=dict, tags=["ML"])
 async def predict_next(request: PredictRequest):
     global predictor
     if predictor is None:
         predictor = ShoppingPredictor.load()
+        logger.info("Predictor inicializado en /predict/next | is_trained=%s", predictor.is_trained)
 
-    # 1. Train/Update model with history (in a real app, this might be async or scheduled)
+    # 1. Entrenamiento/incremental
     if request.history_features:
         df_history = pd.DataFrame([vars(f) for f in request.history_features])
+        logger.info("Entrenando con %s tickets historicos", len(df_history))
         predictor.train(df_history)
-    
+    else:
+        logger.warning("Sin historial para entrenar (se mantiene modelo previo)")
+
     if not predictor.is_trained:
+        logger.error("Modelo no entrenado; abortando prediccion")
         raise HTTPException(status_code=503, detail="Model not trained yet")
 
-    # 2. Predict
+    # 2. Predicción
     current_features = vars(request.features_now)
+    logger.info(
+        "Prediccion solicitada | user_id=%s | current_date=%s | history=%s",
+        request.user_id,
+        request.current_date,
+        len(request.history_features),
+    )
     model_input = {
-        'day_of_week': current_features['day_of_week'],
-        'hour_of_day': current_features['hour_of_day'],
-        'days_since_last_shop': current_features['days_since_last_shop'],
-        'total_last_30d': current_features['total_last_30d'],
-        'tickets_last_30d': current_features['tickets_last_30d'],
-        'is_payday_week': current_features['is_payday_week']
+        "day_of_week": current_features["day_of_week"],
+        "hour_of_day": current_features["hour_of_day"],
+        "days_since_last_shop": current_features["days_since_last_shop"],
+        "total_last_30d": current_features["total_last_30d"],
+        "tickets_last_30d": current_features["tickets_last_30d"],
+        "is_payday_week": current_features["is_payday_week"],
     }
-    
+
     result = predictor.predict_next_visit(model_input)
-    
-    # 3. Format response
+    logger.info(
+        "Resultado modelo | days_until=%.2f | hour=%s | spend=%.2f",
+        result.get("days_until", -1.0),
+        result.get("predicted_hour", -1),
+        result.get("predicted_spend", -1.0),
+    )
+
+    # 3. Formatear respuesta
     current_dt = datetime.fromisoformat(request.current_date)
-    
-    days_until = result['days_until']
+
+    days_until = result["days_until"]
     if pd.isna(days_until):
         logger.warning("Prediccion de dias es NaN, usando valor por defecto (7 dias)")
         days_until = 7.0
-        
-    predicted_date = current_dt + timedelta(days=days_until)
-    predicted_date = predicted_date.replace(hour=result['predicted_hour'], minute=0, second=0)
 
-    # Build human-friendly day label
+    predicted_date = current_dt + timedelta(days=days_until)
+    predicted_date = predicted_date.replace(hour=result["predicted_hour"], minute=0, second=0)
+
     day_diff = (predicted_date.date() - current_dt.date()).days
     weekday_names = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
     weekday = weekday_names[predicted_date.weekday()]
@@ -233,49 +245,22 @@ async def predict_next(request: PredictRequest):
     elif day_diff < 7:
         day_label = f"este {weekday}"
     else:
-        day_label = f"próximo {weekday}"
+        day_label = f"el próximo {weekday}"
 
-    start_hour = result['predicted_hour']
+    start_hour = result["predicted_hour"]
     end_hour = min(start_hour + 2, 23)
     time_window_range = f"{start_hour:02d}:00 - {end_hour:02d}:00"
 
-    # Price range (10% band) as an approximation while we improve the model variance
-    base_total = max(result['predicted_spend'], 0.0)
+    base_total = max(result["predicted_spend"], 0.0)
     estimated_min = round(base_total * 0.9, 2)
     estimated_max = round(base_total * 1.1, 2)
-    
-    # Determine learning mode
+
     learning_mode = False
     if request.history_features and len(request.history_features) < 15:
         learning_mode = True
 
-    # Suggested products fallback (until per-user stats are wired)
-    suggested_products = [
-        {
-            "name": "Leche entera Hacendado",
-            "probability": 0.92,
-            "price_estimation": 5.70,
-            "reason": "Cesta base semanal (alta frecuencia)",
-        },
-        {
-            "name": "Huevos camperos 12ud",
-            "probability": 0.81,
-            "price_estimation": 3.20,
-            "reason": "Reposición habitual cada 5-7 días",
-        },
-        {
-            "name": "Pan de molde 100% integral",
-            "probability": 0.75,
-            "price_estimation": 1.85,
-            "reason": "Patrón de desayuno detectado",
-        },
-        {
-            "name": "Fruta de temporada",
-            "probability": 0.68,
-            "price_estimation": 3.50,
-            "reason": "Compra recurrente para snacks",
-        },
-    ]
+    # Sin placeholders: el backend inyectará productos reales
+    suggested_products: list[dict] = []
 
     return {
         "prediction": {
@@ -286,27 +271,30 @@ async def predict_next(request: PredictRequest):
             "estimated_total": round(base_total, 2),
             "estimated_total_min": estimated_min,
             "estimated_total_max": estimated_max,
-            "confidence": 0.85,  # Placeholder
+            "confidence": 0.85,
             "suggested_products": suggested_products,
-            "learning_mode": learning_mode
+            "learning_mode": learning_mode,
         }
     }
+
 
 # ============================================================================
 # EXCEPTION HANDLERS
 # ============================================================================
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handler global para excepciones no capturadas."""
-    logger.exception("Excepcion no capturada: {}", exc)
+    logger.exception("Excepcion no capturada: %s", exc)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Error interno del servidor"},
     )
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "main:app",
         host="127.0.0.1",
