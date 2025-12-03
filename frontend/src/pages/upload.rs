@@ -2,7 +2,7 @@ use crate::api::tickets::{process_ticket_ocr, ProcessTicketResponse};
 use crate::components::{Button, ButtonVariant, Card};
 use leptos::*;
 use std::collections::HashSet;
-use web_sys::{File, HtmlInputElement};
+use web_sys::{ClipboardEvent, DragEvent, File, FileList, HtmlInputElement};
 
 #[derive(Clone, PartialEq)]
 enum UploadStatus {
@@ -28,6 +28,7 @@ pub fn Upload() -> impl IntoView {
     let (processing, set_processing) = create_signal(false);
     let (processing_batch, set_processing_batch) = create_signal(HashSet::<String>::new());
     let (_user_email, set_user_email) = create_signal(None::<String>);
+    let (upload_error, set_upload_error) = create_signal(None::<String>());
 
     // Obtener email del usuario de localStorage
     create_effect(move |_| {
@@ -41,6 +42,23 @@ pub fn Upload() -> impl IntoView {
     });
 
     let file_input_ref = create_node_ref::<html::Input>();
+
+    let build_file_status = |file: File| {
+        let id = format!("{}-{}", file.name(), js_sys::Date::now());
+        let mut preview_url = None;
+        if file.type_().starts_with("image/") {
+            preview_url = create_object_url(&file).ok();
+        }
+
+        FileStatus {
+            id,
+            file,
+            status: UploadStatus::Pending,
+            result: None,
+            error: None,
+            preview_url,
+        }
+    };
 
     // Helper to check if batch is complete and reset processing state
     let check_and_reset_batch = move || {
@@ -64,39 +82,65 @@ pub fn Upload() -> impl IntoView {
         }
     };
 
+    let add_files_from_list = {
+        let build_file_status_fn = build_file_status;
+        move |file_list: FileList| {
+            let mut new_files = Vec::new();
+            let mut rejected = Vec::new();
+
+            for i in 0..file_list.length() {
+                if let Some(file) = file_list.get(i) {
+                    if is_allowed_file(&file) {
+                        new_files.push(build_file_status_fn(file));
+                    } else {
+                        rejected.push(file.name());
+                    }
+                }
+            }
+
+            if !new_files.is_empty() {
+                set_files.update(|current| current.extend(new_files));
+                set_upload_error.set(None);
+            }
+
+            if !rejected.is_empty() {
+                set_upload_error.set(Some(format!(
+                    "Formato no permitido: {}. Solo se aceptan imágenes o PDF.",
+                    rejected.join(", ")
+                )));
+            }
+        }
+    };
+
     let handle_file_select = move |ev: web_sys::Event| {
         let target = event_target::<HtmlInputElement>(&ev);
         if let Some(file_list) = target.files() {
-            let mut new_files = Vec::new();
-            for i in 0..file_list.length() {
-                if let Some(file) = file_list.get(i) {
-                    let id = format!("{}-{}", file.name(), js_sys::Date::now());
-                    
-                    // Crear preview para imágenes
-                    let mut preview_url = None;
-                    let file_type = file.type_();
-                    if file_type.starts_with("image/") {
-                        if let Ok(url) = create_object_url(&file) {
-                            preview_url = Some(url);
-                        }
-                    }
+            add_files_from_list(file_list);
 
-                    new_files.push(FileStatus {
-                        id,
-                        file,
-                        status: UploadStatus::Pending,
-                        result: None,
-                        error: None,
-                        preview_url,
-                    });
-                }
-            }
-            
-            set_files.update(|current| current.extend(new_files));
-            
             // Reset input so same files can be selected again if needed
             if let Some(input) = file_input_ref.get() {
                 input.set_value("");
+            }
+        }
+    };
+
+    let handle_drop = move |ev: DragEvent| {
+        ev.prevent_default();
+        if let Some(data_transfer) = ev.data_transfer() {
+            if let Some(file_list) = data_transfer.files() {
+                add_files_from_list(file_list);
+            }
+        }
+    };
+
+    let handle_drag_over = move |ev: DragEvent| {
+        ev.prevent_default();
+    };
+
+    let handle_paste = move |ev: ClipboardEvent| {
+        if let Some(data) = ev.clipboard_data() {
+            if let Some(files) = data.files() {
+                add_files_from_list(files);
             }
         }
     };
@@ -251,6 +295,10 @@ pub fn Upload() -> impl IntoView {
                     <div
                         class="relative border-3 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-primary-400 transition-colors cursor-pointer group"
                         on:click=trigger_file_input
+                        on:dragover=handle_drag_over
+                        on:drop=handle_drop
+                        on:paste=handle_paste
+                        tabindex="0"
                     >
                         <input
                             node_ref=file_input_ref
@@ -278,6 +326,10 @@ pub fn Upload() -> impl IntoView {
                                 </p>
                             </div>
                         </div>
+
+                        {move || upload_error.get().map(|msg| view! {
+                            <p class="mt-3 text-sm text-red-600">{msg}</p>
+                        })}
                     </div>
 
                     // File List
@@ -480,4 +532,17 @@ pub fn Upload() -> impl IntoView {
 fn create_object_url(file: &File) -> Result<String, String> {
     web_sys::Url::create_object_url_with_blob(file)
         .map_err(|_| "Error al crear preview".to_string())
+}
+
+fn is_allowed_file(file: &File) -> bool {
+    let mime = file.type_();
+    if mime.starts_with("image/") || mime == "application/pdf" {
+        return true;
+    }
+
+    let name = file.name().to_lowercase();
+    let allowed_extensions = ["pdf", "png", "jpg", "jpeg", "webp", "heic", "heif"];
+    allowed_extensions
+        .iter()
+        .any(|ext| name.ends_with(ext))
 }
