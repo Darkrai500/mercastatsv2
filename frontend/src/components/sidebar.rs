@@ -15,6 +15,18 @@ pub fn Sidebar(
     #[prop(into)] on_view_change: Callback<DashboardView>,
 ) -> impl IntoView {
     // Obtener email del usuario desde localStorage
+    // Obtener estado demo
+    let is_demo_user = create_memo(move |_| {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                if let Ok(Some(demo)) = storage.get_item("user_is_demo") {
+                    return demo == "true";
+                }
+            }
+        }
+        false
+    });
+
     let user_email = create_memo(move |_| {
         if let Some(window) = web_sys::window() {
             if let Ok(Some(storage)) = window.local_storage() {
@@ -39,6 +51,15 @@ pub fn Sidebar(
                     <div>
                         <h1 class="text-lg font-bold text-gray-900">"Mercastats"</h1>
                         <p class="text-xs text-gray-500">"Dashboard"</p>
+                        {move || if is_demo_user.get() {
+                            view! {
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 mt-1">
+                                    "Modo Demo"
+                                </span>
+                            }.into_view()
+                        } else {
+                            view! {}.into_view()
+                        }}
                     </div>
                 </div>
             </div>
@@ -206,6 +227,7 @@ pub fn Sidebar(
                                 if let Ok(Some(storage)) = window.local_storage() {
                                     let _ = storage.remove_item("auth_token");
                                     let _ = storage.remove_item("user_email");
+                                    let _ = storage.remove_item("user_is_demo");
                                 }
                                 // Redirigir al login
                                 let _ = window.location().set_href("/");

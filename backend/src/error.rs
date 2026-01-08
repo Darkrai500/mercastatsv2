@@ -18,6 +18,7 @@ pub enum AppError {
     DuplicatePurchase(String),
     DatabaseIntegrity(String),
     InvalidTicketData(String),
+    DemoUserRestriction,
 }
 
 /// Estructura de respuesta de error para JSON
@@ -70,6 +71,10 @@ impl IntoResponse for AppError {
                 )
             }
             AppError::InvalidTicketData(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
+            AppError::DemoUserRestriction => (
+                StatusCode::FORBIDDEN,
+                "Acción no permitida para el usuario demo".to_string(),
+            ),
         };
 
         let body = Json(ErrorResponse {

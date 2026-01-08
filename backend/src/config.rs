@@ -9,6 +9,7 @@ pub struct AppConfig {
     pub intelligence_api_key: Option<String>,
     pub intelligence_timeout_secs: u64,
     pub intelligence_max_retries: u32,
+    pub demo_user_email: Option<String>,
 }
 
 impl AppConfig {
@@ -54,6 +55,7 @@ impl AppConfig {
             intelligence_api_key,
             intelligence_timeout_secs,
             intelligence_max_retries,
+            demo_user_email: std::env::var("DEMO_USER_EMAIL").ok().filter(|v| !v.is_empty()),
         })
     }
 

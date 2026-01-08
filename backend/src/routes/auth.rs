@@ -58,11 +58,19 @@ pub async fn register(
     // Generar JWT
     let token = generate_jwt(&user.email, &state.config.jwt_secret)?;
 
+    let is_demo = state
+        .config
+        .demo_user_email
+        .as_ref()
+        .map(|e| e == &user.email)
+        .unwrap_or(false);
+
     Ok(Json(AuthResponse {
         token,
         user: UserInfo {
             email: user.email,
             nombre: user.nombre,
+            is_demo,
         },
     }))
 }
@@ -97,11 +105,19 @@ pub async fn login(
     // Generar JWT
     let token = generate_jwt(&user.email, &state.config.jwt_secret)?;
 
+    let is_demo = state
+        .config
+        .demo_user_email
+        .as_ref()
+        .map(|e| e == &user.email)
+        .unwrap_or(false);
+
     Ok(Json(AuthResponse {
         token,
         user: UserInfo {
             email: user.email,
             nombre: user.nombre,
+            is_demo,
         },
     }))
 }

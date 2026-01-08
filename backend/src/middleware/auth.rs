@@ -10,6 +10,7 @@ use crate::{error::AppError, routes::auth::AppState, services::verify_jwt};
 #[derive(Debug, Clone)]
 pub struct AuthenticatedUser {
     pub email: String,
+    pub is_demo: bool,
 }
 
 #[async_trait]
@@ -36,7 +37,19 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             .ok_or_else(|| AppError::Unauthorized("Formato de token invalido".to_string()))?;
 
         match verify_jwt(token, &state.config.jwt_secret) {
-            Ok(claims) => Ok(AuthenticatedUser { email: claims.sub }),
+            Ok(claims) => {
+                let is_demo = state
+                    .config
+                    .demo_user_email
+                    .as_ref()
+                    .map(|demo_email| demo_email == &claims.sub)
+                    .unwrap_or(false);
+
+                Ok(AuthenticatedUser {
+                    email: claims.sub,
+                    is_demo,
+                })
+            }
             Err(err) => {
                 tracing::warn!("Intento de acceso con JWT invalido: {:?}", err);
                 Err(AppError::Unauthorized(

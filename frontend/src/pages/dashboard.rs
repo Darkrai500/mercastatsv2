@@ -20,6 +20,7 @@ pub fn Dashboard() -> impl IntoView {
                     if let Ok(Some(storage)) = window.local_storage() {
                         let _ = storage.remove_item("auth_token");
                         let _ = storage.remove_item("user_email");
+                        let _ = storage.remove_item("user_is_demo");
                     }
                 }
                 navigate("/", Default::default());

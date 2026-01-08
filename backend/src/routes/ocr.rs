@@ -55,7 +55,12 @@ pub async fn process_ticket(
 
     let AuthenticatedUser {
         email: authenticated_email,
+        is_demo,
     } = auth_user;
+
+    if is_demo {
+        return Err(AppError::DemoUserRestriction);
+    }
 
     if let Some(ref mime) = payload.mime_type {
         let allowed = mime.starts_with("image/") || mime == "application/pdf";

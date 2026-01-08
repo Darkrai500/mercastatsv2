@@ -20,6 +20,8 @@ pub struct RegisterRequest {
 pub struct UserInfo {
     pub email: String,
     pub nombre: Option<String>,
+    #[serde(default)]
+    pub is_demo: bool,
 }
 
 /// Respuesta de autenticación con token JWT

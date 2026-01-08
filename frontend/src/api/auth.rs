@@ -18,6 +18,8 @@ pub struct LoginResponse {
 pub struct UserInfo {
     pub email: String,
     pub nombre: Option<String>,
+    #[serde(default)]
+    pub is_demo: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

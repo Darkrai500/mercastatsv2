@@ -31,6 +31,7 @@ pub fn Upload() -> impl IntoView {
     let (processing, set_processing) = create_signal(false);
     let (processing_batch, set_processing_batch) = create_signal(HashSet::<String>::new());
     let (_user_email, set_user_email) = create_signal(None::<String>);
+    let (is_demo, set_is_demo) = create_signal(false);
     let (upload_error, set_upload_error) = create_signal(None::<String>);
     let (review_modal_open, set_review_modal_open) = create_signal(false);
 
@@ -41,12 +42,15 @@ pub fn Upload() -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    // Obtener email del usuario de localStorage
+    // Obtener email y estado demo del usuario de localStorage
     create_effect(move |_| {
         if let Some(window) = web_sys::window() {
             if let Ok(Some(storage)) = window.local_storage() {
                 if let Ok(Some(email)) = storage.get_item("user_email") {
                     set_user_email.set(Some(email));
+                }
+                if let Ok(Some(demo_str)) = storage.get_item("user_is_demo") {
+                    set_is_demo.set(demo_str == "true");
                 }
             }
         }
@@ -164,6 +168,11 @@ pub fn Upload() -> impl IntoView {
     };
 
     let process_file = move |file_status: FileStatus, ingest: bool| {
+        if is_demo.get() {
+            set_upload_error.set(Some("Como usuario demo no puedes insertar tickets. Crea un usuario para poder hacerlo.".to_string()));
+            return;
+        }
+
         let id = file_status.id.clone();
         let file_clone = file_status.file.clone();
         
