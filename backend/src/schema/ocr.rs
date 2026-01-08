@@ -13,6 +13,9 @@ pub struct TicketProcessPayload {
     #[serde(alias = "pdf_b64")]
     #[validate(length(min = 1, message = "file_content_b64 es requerido"))]
     pub file_content_b64: String,
+    /// MIME enviado por el cliente (opcional, el worker valida igualmente)
+    #[validate(length(min = 1, message = "mime_type no puede estar vacio"))]
+    pub mime_type: Option<String>,
     /// Email del usuario (temporal hasta que se implemente autenticacion JWT)
     #[validate(email(message = "usuario_email debe ser un email valido"))]
     pub usuario_email: Option<String>,
@@ -24,6 +27,7 @@ impl From<TicketProcessPayload> for OcrProcessTicketRequest {
             ticket_id: value.ticket_id,
             file_name: value.file_name,
             file_content_b64: value.file_content_b64,
+            mime_type: value.mime_type,
         }
     }
 }

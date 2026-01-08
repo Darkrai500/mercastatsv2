@@ -10,3 +10,5 @@ pydantic-settings
 python-multipart
 pdfplumber
 loguru
+pytesseract
+Pillow

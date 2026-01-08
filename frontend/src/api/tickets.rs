@@ -26,6 +26,7 @@ pub struct ProcessTicketRequest {
     pub file_name: String,
     pub pdf_b64: String,
     pub usuario_email: Option<String>,
+    pub mime_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -55,17 +56,48 @@ pub struct OcrResponseSummary {
     pub ticket_id: String,
     pub numero_factura: Option<String>,
     pub fecha: Option<String>,
+    #[serde(deserialize_with = "option_f64_from_number_or_string")]
     pub total: Option<f64>,
     pub productos_detectados: usize,
+    #[serde(default)]
+    pub productos: Vec<TicketProduct>,
+    #[serde(default)]
+    pub tienda: Option<String>,
+    #[serde(default)]
+    pub processing_profile: Option<String>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+    #[serde(default)]
+    pub raw_text_preview: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TicketIngestionResponse {
+    #[serde(default)]
     pub ingested: bool,
-    pub numero_factura: String,
-    pub total: String,
-    pub productos_insertados: usize,
-    pub fecha_hora: String,
+    #[serde(default)]
+    pub ticket_id: Option<String>,
+    #[serde(default)]
+    pub raw_text: Option<String>,
+    pub numero_factura: Option<String>,
+    pub fecha: Option<String>,
+    pub fecha_hora: Option<String>,
+    #[serde(deserialize_with = "option_f64_from_number_or_string")]
+    pub total: Option<f64>,
+    #[serde(default)]
+    pub tienda: Option<String>,
+    #[serde(default)]
+    pub ubicacion: Option<String>,
+    #[serde(default)]
+    pub metodo_pago: Option<String>,
+    #[serde(default)]
+    pub numero_operacion: Option<String>,
+    #[serde(default)]
+    pub productos: Vec<TicketProduct>,
+    #[serde(default)]
+    pub iva_desglose: Vec<IvaBreakdown>,
+    #[serde(default)]
+    pub productos_insertados: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -162,21 +194,29 @@ pub async fn get_user_ticket_history() -> Result<TicketHistoryResponse, String> 
 }
 
 /// Procesar ticket con OCR (PDF o imagen) e ingestarlo en la base de datos
-pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, String> {
+pub async fn process_ticket_ocr(file: File, ingest: bool) -> Result<ProcessTicketResponse, String> {
     let url = format!("{}/ocr/process", API_BASE_URL);
     let token = get_auth_token().ok_or_else(|| "No hay sesion activa".to_string())?;
 
     // Generar ID unico para el ticket
     let ticket_id = format!("ticket_{}", js_sys::Date::now() as u64);
     let file_name = file.name();
+    let mime_type = {
+        let mt = file.type_();
+        if mt.is_empty() { None } else { Some(mt) }
+    };
 
     // Convertir archivo a base64
     let pdf_b64 = file_to_base64(&file).await?;
 
-    // Obtener email del usuario de localStorage
-    let usuario_email = if let Some(window) = web_sys::window() {
-        if let Ok(Some(storage)) = window.local_storage() {
-            storage.get_item("user_email").ok().flatten()
+    // Obtener email del usuario de localStorage solo si vamos a ingerir
+    let usuario_email = if ingest {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                storage.get_item("user_email").ok().flatten()
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -189,6 +229,7 @@ pub async fn process_ticket_ocr(file: File) -> Result<ProcessTicketResponse, Str
         file_name,
         pdf_b64,
         usuario_email,
+        mime_type,
     };
 
     let response = Request::post(&url)
@@ -239,6 +280,31 @@ pub struct UserStats {
 pub struct TicketHistoryResponse {
     pub tickets: Vec<TicketHistoryItem>,
     pub stats: UserStats,
+}
+
+fn option_f64_from_number_or_string<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Error, Unexpected};
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumOrString {
+        Num(f64),
+        Str(String),
+        Null,
+    }
+
+    match NumOrString::deserialize(deserializer)? {
+        NumOrString::Num(n) => Ok(Some(n)),
+        NumOrString::Str(s) => s
+            .replace(',', ".")
+            .parse::<f64>()
+            .map(Some)
+            .map_err(|_| Error::invalid_value(Unexpected::Str(&s), &"un numero valido")),
+        NumOrString::Null => Ok(None),
+    }
 }
 
 /// Convierte un archivo a base64

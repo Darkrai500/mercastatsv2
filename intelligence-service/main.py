@@ -136,15 +136,20 @@ async def health_check():
 # --- OCR ENDPOINTS ---
 
 
+from processor import PDFParsingError, ImageParsingError, process_ticket_response
+
+# ... (imports)
+
 @app.post("/ocr/process", response_model=ProcessTicketResponse, tags=["OCR"])
 async def process_ticket(request: ProcessTicketRequest):
-    logger.info("Procesando ticket %s | archivo=%s", request.ticket_id, request.file_name)
+    logger.info("Procesando ticket %s | archivo=%s | mime=%s", request.ticket_id, request.file_name, request.mime_type)
 
     try:
         response = process_ticket_response(
             ticket_id=request.ticket_id,
             file_name=request.file_name,
             pdf_b64=request.file_content_b64,
+            mime_type=request.mime_type,
         )
 
         fecha_repr = (
@@ -163,11 +168,11 @@ async def process_ticket(request: ProcessTicketRequest):
 
         return response
 
-    except PDFParsingError as exc:
+    except (PDFParsingError, ImageParsingError) as exc:
         logger.error("Error de parsing: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"No se pudo procesar el PDF: {exc}",
+            detail=f"No se pudo procesar el archivo: {exc}",
         ) from exc
     except Exception as exc:
         logger.exception("Error inesperado: %s", exc)

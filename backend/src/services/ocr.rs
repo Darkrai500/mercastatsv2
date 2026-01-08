@@ -7,6 +7,8 @@ pub struct OcrProcessTicketRequest {
     pub file_name: String,
     #[serde(rename = "file_content_b64")]
     pub file_content_b64: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
 }
 
 /// Producto detectado en el ticket.
@@ -50,4 +52,8 @@ pub struct OcrProcessTicketResponse {
     pub productos: Vec<TicketProduct>,
     #[serde(default)]
     pub iva_desglose: Vec<IvaBreakdown>,
+    #[serde(default)]
+    pub processing_profile: Option<String>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }

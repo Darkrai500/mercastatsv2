@@ -18,6 +18,7 @@ class ProcessTicketRequest(BaseModel):
         ticket_id: ID temporal/UUID generado por el backend para correlacion
         file_name: Nombre del archivo PDF original
         file_content_b64: Contenido del PDF codificado en base64
+        mime_type: MIME detectado en frontend (opcional, el worker detecta por magic bytes)
     """
 
     ticket_id: str = Field(..., description="ID provisional del ticket (UUID)")
@@ -28,6 +29,10 @@ class ProcessTicketRequest(BaseModel):
         validation_alias=AliasChoices("file_content_b64", "pdf_b64"),
         serialization_alias="file_content_b64",
     )
+    mime_type: Optional[str] = Field(
+        default=None,
+        description="MIME reportado por el cliente (image/*, application/pdf)",
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -35,7 +40,8 @@ class ProcessTicketRequest(BaseModel):
             "example": {
                 "ticket_id": "550e8400-e29b-41d4-a716-446655440000",
                 "file_name": "ticket_mercadona_2023.pdf",
-                "file_content_b64": "JVBERi0xLjQKJeLjz9MKMy..."
+                "file_content_b64": "JVBERi0xLjQKJeLjz9MKMy...",
+                "mime_type": "application/pdf",
             }
         },
     )
@@ -88,6 +94,14 @@ class ProcessTicketResponse(BaseModel):
         default_factory=list,
         description="Desglose de IVA encontrado en el ticket",
     )
+    processing_profile: Optional[str] = Field(
+        default=None,
+        description="Pipeline usado: pdf-text | pdf-ocr | image-ocr",
+    )
+    warnings: List[str] = Field(
+        default_factory=list,
+        description="Avisos generados durante el OCR/preprocesado",
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -119,7 +133,9 @@ class ProcessTicketResponse(BaseModel):
                     {"porcentaje": 10.0, "base_imponible": 22.7, "cuota": 2.27},
                     {"porcentaje": 21.0, "base_imponible": 11.94, "cuota": 2.51},
                     {"porcentaje": 0.0, "base_imponible": 12.69, "cuota": 0.0}
-                ]
+                ],
+                "processing_profile": "pdf-ocr",
+                "warnings": ["Texto PDF insuficiente; se aplica OCR sobre imagen"]
             }
         },
     )

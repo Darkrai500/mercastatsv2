@@ -1,9 +1,7 @@
 """
 Servicio de parsing de tickets de Mercadona.
 
-Usa pdfplumber para extraer el texto del PDF y aplica expresiones
-regulares y heuristicas para obtener los datos necesarios
-segun el schema de Mercastats.
+Soporta PDFs nativos, PDFs escaneados (fallback a OCR) e imagenes (JPG/PNG/WEBP/HEIC).
 """
 
 import base64
@@ -11,9 +9,13 @@ import io
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
+import cv2
+import numpy as np
 import pdfplumber
+import pytesseract
+from PIL import Image, ImageOps
 from loguru import logger
 
 from ..constants import (
@@ -29,6 +31,14 @@ from ..constants import (
     PATTERN_TOTAL_ALT,
     PATTERN_IVA,
 )
+
+try:
+    import pillow_heif
+
+    pillow_heif.register_heif_opener()
+except Exception:  # pragma: no cover - defensivo si no esta instalado
+    pillow_heif = None  # type: ignore
+    logger.warning("pillow-heif no disponible; los HEIC/HEIF pueden fallar al abrirse")
 
 
 # ============================================================================
@@ -74,15 +84,34 @@ class ParsedTicket:
     numero_operacion: Optional[str]
     productos: List[ParsedProduct] = field(default_factory=list)
     iva_desglose: List[IvaBreakdown] = field(default_factory=list)
+    processing_profile: Optional[str] = None
+    warnings: List[str] = field(default_factory=list)
+
+
+@dataclass
+class TextExtractionResult:
+    """Resultado de la fase de extraccion de texto (PDF o imagen)."""
+
+    text: str
+    processing_profile: str
+    warnings: List[str] = field(default_factory=list)
 
 
 # ============================================================================
-# EXCEPCIÓN PERSONALIZADA
+# EXCEPCIONES PERSONALIZADAS
 # ============================================================================
 
 
 class PDFParsingError(Exception):
-    """Error especifico cuando no se puede interpretar el PDF."""
+    """Error generico cuando no se puede interpretar el ticket."""
+
+
+class UnsupportedFormatError(PDFParsingError):
+    """Formato de archivo no soportado (ni PDF ni imagen reconocida)."""
+
+
+class TicketNotDetectedError(PDFParsingError):
+    """No se encontro texto suficiente para considerar que hay un ticket."""
 
 
 # ============================================================================
@@ -95,9 +124,14 @@ PRODUCTO_LINE_REGEX = re.compile(
 )
 PRODUCTO_PESADO_HEADER_REGEX = re.compile(r"^(?P<cantidad>\d+)\s+(?P<descripcion>.+)$")
 
+MIN_TEXT_CHARS = 30
+MAX_IMAGE_SIDE = 2000
+OCR_CONFIG = "--oem 3 --psm 6"
+OCR_LANG = "spa+eng"
+
 
 def parse_decimal(value: str) -> float:
-    """Convierte numeros con coma decimal española a float."""
+    """Convierte numeros con coma decimal espanola a float."""
     normalizado = value.replace(".", "").replace(",", ".")
     return float(normalizado)
 
@@ -107,13 +141,61 @@ def clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def detect_source_type(data: bytes) -> str:
+    """Detecta si el contenido es PDF o imagen por magic bytes."""
+    if data.startswith(b"%PDF"):
+        return "pdf"
+    if data[:2] == b"\xff\xd8":
+        return "image"  # JPEG
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image"
+    if data[4:12] in {b"ftypheic", b"ftypheif", b"ftypmif1", b"ftypmsf1"}:
+        return "image"
+    return "unknown"
+
+
+def resolve_source_type(data: bytes, mime_type: Optional[str]) -> str:
+    """
+    Determina el tipo de origen combinando mime_type (si viene del cliente) y magic bytes.
+
+    Priorizamos el mime_type para evitar falsos positivos (ej: imagen tratada como PDF),
+    pero dejamos trazas si no coincide con lo que reportan los magic bytes.
+    """
+    explicit: Optional[str] = None
+    if mime_type:
+        lowered = mime_type.lower()
+        if lowered.startswith("image/"):
+            explicit = "image"
+        elif lowered == "application/pdf":
+            explicit = "pdf"
+
+    detected = detect_source_type(data)
+
+    if explicit and detected not in {"unknown", explicit}:
+        logger.warning(
+            f"mime_type '{mime_type}' no coincide con magic bytes '{detected}'; se prioriza mime_type"
+        )
+
+    return explicit or detected
+
+
+def ensure_text_threshold(text: str) -> None:
+    if len(text.strip()) < MIN_TEXT_CHARS:
+        raise TicketNotDetectedError(
+            "No se detecto texto suficiente para interpretar el ticket. "
+            "Sube un PDF legible o una foto mas nitida."
+        )
+
+
 # ============================================================================
 # EXTRACCION DE TEXTO
 # ============================================================================
 
 
-def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extrae todo el texto de un PDF usando pdfplumber."""
+def extract_text_from_pdf(pdf_bytes: bytes) -> TextExtractionResult:
+    """Extrae texto de un PDF usando pdfplumber; si no hay texto levanta error."""
     try:
         pdf_buffer = io.BytesIO(pdf_bytes)
         pages_text: List[str] = []
@@ -136,14 +218,126 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
         full_text = "\n\n".join(pages_text)
         logger.info(f"Texto extraido exitosamente. Total: {len(full_text)} caracteres")
-        return full_text
+        ensure_text_threshold(full_text)
+        return TextExtractionResult(text=full_text, processing_profile="pdf-text", warnings=[])
 
     except pdfplumber.pdfminer.pdfparser.PDFSyntaxError as exc:
         logger.error(f"PDF corrupto o invalido: {exc}")
         raise PDFParsingError(f"PDF corrupto: {exc}") from exc
+    except TicketNotDetectedError:
+        raise
     except Exception as exc:
         logger.error(f"Error inesperado al extraer texto del PDF: {exc}")
         raise PDFParsingError(f"Error al procesar PDF: {exc}") from exc
+
+
+def preprocess_image_for_ocr(image: Image.Image) -> Tuple[np.ndarray, float]:
+    """Normaliza la imagen (RGB->gris, resize, binariza, deskew) para OCR."""
+    img = ImageOps.exif_transpose(image).convert("RGB")
+    np_img = np.array(img)
+    gray = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
+
+    h, w = gray.shape[:2]
+    max_side = max(h, w)
+    if max_side > MAX_IMAGE_SIDE:
+        scale = MAX_IMAGE_SIDE / float(max_side)
+        gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        logger.debug(f"Imagen redimensionada para OCR: {gray.shape[1]}x{gray.shape[0]}")
+
+    denoised = cv2.medianBlur(gray, 3)
+    thresh = cv2.adaptiveThreshold(
+        denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15
+    )
+
+    deskewed, angle = deskew_image(thresh)
+    return deskewed, angle
+
+
+def deskew_image(gray: np.ndarray) -> Tuple[np.ndarray, float]:
+    """Corrige inclinacion basica basada en contornos binarizados."""
+    coords = np.column_stack(np.where(gray > 0))
+    if coords.size == 0:
+        return gray, 0.0
+
+    angle = cv2.minAreaRect(coords)[-1]
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+
+    (h, w) = gray.shape[:2]
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    return rotated, angle
+
+
+def run_ocr(image_np: np.ndarray) -> str:
+    """Ejecuta Tesseract y devuelve el texto normalizado."""
+    try:
+        text = pytesseract.image_to_string(image_np, lang=OCR_LANG, config=OCR_CONFIG)
+    except pytesseract.TesseractNotFoundError as exc:
+        raise PDFParsingError(
+            "Tesseract no esta instalado o no es accesible en PATH. Instala el binario para habilitar OCR."
+        ) from exc
+    except pytesseract.TesseractError as exc:
+        raise PDFParsingError(f"OCR fallo: {exc}") from exc
+
+    return text.strip()
+
+
+def extract_text_from_image_bytes(image_bytes: bytes, profile: str = "image-ocr") -> TextExtractionResult:
+    """Aplica OCR sobre una imagen (JPG/PNG/WEBP/HEIC)."""
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+    except Exception as exc:
+        raise PDFParsingError(f"No se pudo abrir la imagen: {exc}") from exc
+
+    processed, angle = preprocess_image_for_ocr(image)
+    text = run_ocr(processed)
+
+    warnings: List[str] = []
+    if abs(angle) > 0.5:
+        warnings.append(f"Imagen enderezada {angle:.2f} grados para OCR")
+
+    return TextExtractionResult(text=text, processing_profile=profile, warnings=warnings)
+
+
+def extract_text_from_pdf_as_images(pdf_bytes: bytes) -> TextExtractionResult:
+    """Rasteriza el PDF a imagen y aplica OCR pagina por pagina."""
+    pdf_buffer = io.BytesIO(pdf_bytes)
+    texts: List[str] = []
+    warnings: List[str] = ["Texto PDF insuficiente; se aplica OCR sobre imagen"]
+
+    with pdfplumber.open(pdf_buffer) as pdf:
+        if not pdf.pages:
+            raise PDFParsingError("El PDF no tiene paginas interpretable para OCR")
+
+        for idx, page in enumerate(pdf.pages, start=1):
+            try:
+                page_image = page.to_image(resolution=300).original
+                ocr_result = extract_text_from_image_bytes(
+                    image_bytes=image_to_bytes(page_image), profile="pdf-ocr"
+                )
+                texts.append(ocr_result.text)
+                warnings.extend(ocr_result.warnings)
+                logger.info(f"OCR de pagina {idx} completado ({len(ocr_result.text)} chars)")
+            except Exception as exc:  # pragma: no cover - defensivo
+                logger.warning(f"Fallo OCR de la pagina {idx}: {exc}")
+
+    combined = "\n\n".join(texts).strip()
+    if not combined:
+        raise TicketNotDetectedError(
+            "No se pudo extraer texto del PDF escaneado. Reintenta con una foto mas clara."
+        )
+
+    return TextExtractionResult(text=combined, processing_profile="pdf-ocr", warnings=warnings)
+
+
+def image_to_bytes(image: Image.Image) -> bytes:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 # ============================================================================
@@ -162,7 +356,7 @@ def extract_numero_factura(text: str) -> Optional[str]:
     return None
 
 
-def extract_fecha_y_hora(text: str) -> (Optional[str], Optional[datetime]):
+def extract_fecha_y_hora(text: str) -> Tuple[Optional[str], Optional[datetime]]:
     match = PATTERN_FECHA_HORA.search(text)
     if match:
         fecha_str, hora_str = match.groups()
@@ -200,7 +394,7 @@ def extract_total(text: str) -> Optional[float]:
     return None
 
 
-def extract_store_details(text: str) -> (Optional[str], Optional[str]):
+def extract_store_details(text: str) -> Tuple[Optional[str], Optional[str]]:
     store_name: Optional[str] = None
     for line in text.splitlines()[:10]:
         if "MERCADONA" in line.upper():
@@ -280,7 +474,7 @@ def extract_products(text: str) -> List[ParsedProduct]:
             continue
 
         normalized = line.lower()
-        normalized_clean = normalized.replace("�", "e")
+        normalized_clean = normalized.replace("?", "e")
         if "descrip" in normalized_clean and "importe" in normalized_clean:
             in_section = True
             index += 1
@@ -422,39 +616,61 @@ def assign_iva_to_products(productos: List[ParsedProduct], iva_desglose: List[Iv
 # ============================================================================
 
 
-def parse_ticket(pdf_b64: str) -> ParsedTicket:
-    """Orquesta la extraccion completa de un ticket."""
+def parse_ticket(file_b64: str, mime_type: Optional[str] = None) -> ParsedTicket:
+    """Orquesta la extraccion completa de un ticket PDF o imagen."""
     logger.info("Iniciando parsing de ticket...")
 
     try:
-        pdf_bytes = base64.b64decode(pdf_b64)
-        logger.info(f"PDF decodificado. Tamano: {len(pdf_bytes)} bytes")
+        file_bytes = base64.b64decode(file_b64)
+        logger.info(f"Archivo decodificado. Tamano: {len(file_bytes)} bytes")
 
-        raw_text = extract_text_from_pdf(pdf_bytes)
-        preview = raw_text[:MAX_RAW_TEXT_PREVIEW].replace("\n", " ")
+        source_type = resolve_source_type(file_bytes, mime_type)
+        if source_type == "unknown":
+            raise UnsupportedFormatError(
+                "Formato no soportado. Solo se aceptan PDF o imagenes (jpg, png, webp, heic)."
+            )
+
+        if source_type == "pdf":
+            try:
+                text_result = extract_text_from_pdf(file_bytes)
+            except PDFParsingError as exc:
+                logger.warning(f"Lectura directa de PDF fallida: {exc}")
+                text_result = extract_text_from_pdf_as_images(file_bytes)
+            except TicketNotDetectedError:
+                text_result = extract_text_from_pdf_as_images(file_bytes)
+        elif source_type == "image":
+            text_result = extract_text_from_image_bytes(file_bytes)
+        else:
+            raise UnsupportedFormatError(
+                "Formato no soportado. Solo se aceptan PDF o imagenes (jpg, png, webp, heic)."
+            )
+
+        ensure_text_threshold(text_result.text)
+        preview = text_result.text[:MAX_RAW_TEXT_PREVIEW].replace("\n", " ")
         logger.debug(f"Preview del texto: {preview}...")
 
-        numero_factura = extract_numero_factura(raw_text)
-        fecha, fecha_hora = extract_fecha_y_hora(raw_text)
-        total = extract_total(raw_text)
-        tienda, ubicacion = extract_store_details(raw_text)
-        metodo_pago = extract_metodo_pago(raw_text)
-        numero_operacion = extract_numero_operacion(raw_text)
-        iva_desglose = extract_iva_breakdown(raw_text)
-        productos = extract_products(raw_text)
+        numero_factura = extract_numero_factura(text_result.text)
+        fecha, fecha_hora = extract_fecha_y_hora(text_result.text)
+        total = extract_total(text_result.text)
+        tienda, ubicacion = extract_store_details(text_result.text)
+        metodo_pago = extract_metodo_pago(text_result.text)
+        numero_operacion = extract_numero_operacion(text_result.text)
+        iva_desglose = extract_iva_breakdown(text_result.text)
+        productos = extract_products(text_result.text)
         assign_iva_to_products(productos, iva_desglose)
 
         logger.info(
-            "Parsing completado: factura=%s fecha=%s fecha_hora=%s total=%s productos=%s",
+            "Parsing completado: factura=%s fecha=%s fecha_hora=%s total=%s productos=%s profile=%s",
             numero_factura,
             fecha,
             fecha_hora.isoformat(timespec="minutes") if fecha_hora else None,
             total,
             len(productos),
+            text_result.processing_profile,
         )
 
         return ParsedTicket(
-            raw_text=raw_text,
+            raw_text=text_result.text,
             numero_factura=numero_factura,
             fecha=fecha,
             fecha_hora=fecha_hora,
@@ -465,11 +681,28 @@ def parse_ticket(pdf_b64: str) -> ParsedTicket:
             numero_operacion=numero_operacion,
             productos=productos,
             iva_desglose=iva_desglose,
+            processing_profile=text_result.processing_profile,
+            warnings=text_result.warnings,
         )
 
     except base64.binascii.Error as exc:
         logger.error(f"Error al decodificar base64: {exc}")
         raise PDFParsingError(f"Base64 invalido: {exc}") from exc
+    except UnsupportedFormatError:
+        raise
+    except TicketNotDetectedError:
+        raise
     except Exception as exc:
         logger.error(f"Error inesperado durante el parsing: {exc}")
         raise
+
+
+__all__ = [
+    "parse_ticket",
+    "PDFParsingError",
+    "TicketNotDetectedError",
+    "UnsupportedFormatError",
+    "ParsedTicket",
+    "ParsedProduct",
+    "IvaBreakdown",
+]

@@ -9,6 +9,7 @@ segun el schema de Mercastats.
 import base64
 import io
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
@@ -84,6 +85,9 @@ class ParsedTicket:
 class PDFParsingError(Exception):
     """Error especifico cuando no se puede interpretar el PDF."""
 
+class ImageParsingError(Exception):
+    """Error especifico cuando no se puede interpretar la imagen."""
+
 
 # ============================================================================
 # FUNCIONES AUXILIARES
@@ -105,6 +109,12 @@ def parse_decimal(value: str) -> float:
 def clean_text(value: str) -> str:
     """Normaliza espacios redundantes."""
     return re.sub(r"\s+", " ", value).strip()
+
+
+def strip_accents(value: str) -> str:
+    """Elimina acentos/diacríticos para facilitar comparaciones."""
+    normalized = unicodedata.normalize("NFD", value)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
 
 
 # ============================================================================
@@ -279,9 +289,8 @@ def extract_products(text: str) -> List[ParsedProduct]:
             index += 1
             continue
 
-        normalized = line.lower()
-        normalized_clean = normalized.replace("", "e")
-        if "descrip" in normalized_clean and "importe" in normalized_clean:
+        normalized = strip_accents(line.lower())
+        if "descrip" in normalized and "importe" in normalized:
             in_section = True
             index += 1
             continue

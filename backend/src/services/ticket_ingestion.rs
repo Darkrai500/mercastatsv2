@@ -5,7 +5,7 @@ use crate::{
     services::{OcrProcessTicketResponse as ProcessTicketResponse, TicketProduct},
 };
 use base64::{engine::general_purpose, Engine as _};
-use chrono::NaiveDateTime;
+use chrono::{Local, NaiveDateTime, TimeZone, Utc};
 use rust_decimal::prelude::*;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -193,14 +193,24 @@ pub async fn ingest_ticket(
 
 /// Parsea la fecha y hora del ticket
 fn parse_fecha_hora(response: &ProcessTicketResponse) -> AppResult<NaiveDateTime> {
+    // Convierte un NaiveDateTime (interpretado como hora local) a UTC para guardar en DB
+    fn to_utc_naive(dt: NaiveDateTime) -> NaiveDateTime {
+        Local
+            .from_local_datetime(&dt)
+            .single()
+            .or_else(|| Local.from_local_datetime(&dt).earliest())
+            .map(|dt_local| dt_local.with_timezone(&Utc).naive_utc())
+            .unwrap_or(dt)
+    }
+
     // Intentar con fecha_hora primero
     if let Some(ref fecha_hora_str) = response.fecha_hora {
         if let Ok(dt) = NaiveDateTime::parse_from_str(fecha_hora_str, "%Y-%m-%d %H:%M:%S") {
-            return Ok(dt);
+            return Ok(to_utc_naive(dt));
         }
         // Intentar con formato ISO
         if let Ok(dt) = NaiveDateTime::parse_from_str(fecha_hora_str, "%Y-%m-%dT%H:%M:%S") {
-            return Ok(dt);
+            return Ok(to_utc_naive(dt));
         }
     }
 
@@ -211,7 +221,8 @@ fn parse_fecha_hora(response: &ProcessTicketResponse) -> AppResult<NaiveDateTime
                 "⚠️  Fecha sin hora detectada, usando 12:00:00 por defecto para ticket {}",
                 response.ticket_id
             );
-            return Ok(date.and_hms_opt(12, 0, 0).unwrap());
+            let dt = date.and_hms_opt(12, 0, 0).unwrap();
+            return Ok(to_utc_naive(dt));
         }
     }
 

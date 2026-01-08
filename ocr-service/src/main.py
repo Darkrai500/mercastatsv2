@@ -21,7 +21,12 @@ from .models import (
     ProcessTicketRequest,
     ProcessTicketResponse,
 )
-from .processor import PDFParsingError, process_ticket_response
+from .processor import (
+    PDFParsingError,
+    TicketNotDetectedError,
+    UnsupportedFormatError,
+    process_ticket_response,
+)
 
 
 # ============================================================================
@@ -106,6 +111,7 @@ async def process_ticket(request: ProcessTicketRequest):
             ticket_id=request.ticket_id,
             file_name=request.file_name,
             pdf_b64=request.file_content_b64,
+            mime_type=request.mime_type,
         )
 
         fecha_repr = (
@@ -115,20 +121,35 @@ async def process_ticket(request: ProcessTicketRequest):
         )
 
         logger.success(
-            "Ticket procesado | factura={} | fecha={} | total={} | productos={}",
+            "Ticket procesado | factura={} | fecha={} | total={} | productos={} | perfil={}",
             response.numero_factura,
             fecha_repr,
             response.total,
             len(response.productos),
+            response.processing_profile,
         )
+        if response.warnings:
+            logger.warning("Avisos OCR: {}", "; ".join(response.warnings))
 
         return response
 
+    except UnsupportedFormatError as exc:
+        logger.error("Formato no soportado: {}", exc)
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except TicketNotDetectedError as exc:
+        logger.error("No se detecto ticket: {}", exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except PDFParsingError as exc:
         logger.error("Error de parsing: {}", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"No se pudo procesar el PDF: {exc}",
+            detail=f"No se pudo procesar el ticket: {exc}",
         ) from exc
     except Exception as exc:
         logger.exception("Error inesperado: {}", exc)

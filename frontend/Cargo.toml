@@ -35,6 +35,9 @@ web-sys = { version = "0.3", features = [
     "Event",
     "Blob",
     "Url",
+    "DragEvent",
+    "ClipboardEvent",
+    "DataTransfer",
 ] }
 
 # Logging

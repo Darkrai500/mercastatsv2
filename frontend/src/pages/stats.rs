@@ -187,25 +187,62 @@ fn TendenciaChart(daily_data: Vec<DailySpendPoint>) -> impl IntoView {
     };
 
     let categories: Vec<String> = daily_data.iter().map(|p| p.fecha.clone()).collect();
+    let has_no_data = daily_data.is_empty();
+    let has_single_point = daily_data.len() == 1;
+    let single_point = daily_data.first().cloned();
+    let chart_id = format!("tendencia-chart-{}", daily_data.len());
 
     view! {
         <div class="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">
-                "📈 Tendencia de Gasto (últimos 30 días)"
+                "?? Tendencia de Gasto (£ltimos 30 d¡as)"
             </h2>
 
-            <Chart
-                id="tendencia-chart".to_string()
-                chart_type=ChartType::Area
-                series=vec![series_data]
-                categories=categories
-                height=400
-                title="".to_string()
-            />
+            {if has_no_data {
+                view! {
+                    <div class="flex items-center justify-center h-64 text-gray-500">
+                        <div class="text-center space-y-1">
+                            <p class="text-base font-semibold text-gray-900">"A˙n no hay datos para mostrar"</p>
+                            <p class="text-sm">"Sube un ticket para ver tu tendencia de gasto"</p>
+                        </div>
+                    </div>
+                }.into_view()
+            } else if has_single_point {
+                let point = single_point.unwrap();
+                let value = parse_decimal(&point.total).unwrap_or(0.0);
+                view! {
+                    <div class="space-y-3">
+                        <div class="rounded-lg border border-blue-100 bg-blue-50/70 text-blue-800 px-3 py-2 text-sm font-medium">
+                            "Solo hay una compra en los £ltimos 30 d¡as. Mostramos el valor como barra hasta tener m s puntos."
+                        </div>
+                        <Chart
+                            id=chart_id.clone()
+                            chart_type=ChartType::BarHorizontal
+                            series=vec![ChartSeriesData {
+                                name: "Gasto Diario".to_string(),
+                                data: vec![value],
+                            }]
+                            categories=vec![point.fecha]
+                            height=260
+                            title="".to_string()
+                        />
+                    </div>
+                }.into_view()
+            } else {
+                view! {
+                    <Chart
+                        id=chart_id
+                        chart_type=ChartType::Area
+                        series=vec![series_data]
+                        categories=categories
+                        height=400
+                        title="".to_string()
+                    />
+                }.into_view()
+            }}
         </div>
     }
 }
-
 #[component]
 fn TopProductsChart<F>(
     title: String,

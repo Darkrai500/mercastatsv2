@@ -28,6 +28,7 @@ class ProcessTicketRequest(BaseModel):
         validation_alias=AliasChoices("file_content_b64", "pdf_b64"),
         serialization_alias="file_content_b64",
     )
+    mime_type: Optional[str] = Field(None, description="MIME type del archivo (opcional)")
 
     model_config = ConfigDict(
         populate_by_name=True,
