@@ -12,3 +12,4 @@ pdfplumber
 loguru
 pytesseract
 Pillow
+pillow-heif >=0.18.0

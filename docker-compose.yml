@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mercastats_db
+    restart: always
+    environment:
+      - POSTGRES_DB=mercastats
+      - POSTGRES_USER=mercastats_user
+      - POSTGRES_PASSWORD=tu_password_seguro_vps
+    volumes:
+      # Persistencia: los datos no se borran aunque apagues el contenedor
+      - postgres_data:/var/lib/postgresql/data
+      # Inicialización automática: Docker ejecuta tu esquema al crear la BD
+      - ./sql/schema/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:

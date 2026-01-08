@@ -2,6 +2,7 @@
 /target
 /backend/target
 /frontend/target
+/backend/.sqlx
 Cargo.lock
 
 # Environment variables

@@ -1,0 +1,46 @@
+# ETAPA 1: Compilación
+FROM rust:slim-bookworm AS builder
+
+# Instalamos dependencias de sistema para compilar SQLx y SSL
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 1. Copiamos los archivos de configuración del Workspace (Raíz)
+COPY Cargo.toml Cargo.lock* ./
+
+# 2. "TRUCO" PARA EL WORKSPACE:
+# Creamos la carpeta del frontend y un archivo src/lib.rs vacío.
+# Esto evita el error "can't find library mercastats_frontend" sin copiar su código real.
+COPY frontend/Cargo.toml ./frontend/
+RUN mkdir -p frontend/src && touch frontend/src/lib.rs
+
+# 3. Copiamos la carpeta del backend completa
+COPY backend ./backend
+
+# 4. Compilamos el binario especificando el paquete
+# Cargo verá que el frontend "existe" (gracias al archivo vacío) y compilará el backend.
+ENV SQLX_OFFLINE=true
+RUN cargo build --release --package mercastats-backend
+
+# ETAPA 2: Ejecución
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    libpq5 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# El binario se genera en target/release/ de la raíz del proyecto
+COPY --from=builder /app/target/release/mercastats-backend ./server
+
+EXPOSE 8000
+
+CMD ["./server"]

@@ -25,7 +25,7 @@ python-dotenv==1.0.1
 # OCR y preprocesado de imagenes
 pytesseract==0.3.10
 pillow==10.4.0
-pillow-heif==0.19.0
+pillow-heif==0.20.0
 opencv-python-headless==4.10.0.84
 
 # ML / Ciencia de datos (placeholder para futuros modelos)

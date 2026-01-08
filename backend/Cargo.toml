@@ -9,6 +9,9 @@ axum = "0.7"
 tokio = { workspace = true }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
+base64ct = "1.6.0"
+home = "=0.5.9"
+thiserror = "=1.0.64"
 
 # Base de datos
 sqlx = { workspace = true }
@@ -39,7 +42,7 @@ jsonwebtoken = "9.2"
 validator = { version = "0.18", features = ["derive"] }
 
 # Errores
-thiserror = "1.0"
+
 anyhow = "1.0"
 
 # HTTP client para servicios externos
