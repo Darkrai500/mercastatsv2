@@ -35,6 +35,18 @@ pub fn TicketHistory() -> impl IntoView {
     let (current_page, set_current_page) = create_signal(1);
     const ITEMS_PER_PAGE: usize = 15;
 
+    // Obtener estado demo
+    let is_demo_user = create_memo(move |_| {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                if let Ok(Some(demo)) = storage.get_item("user_is_demo") {
+                    return demo == "true";
+                }
+            }
+        }
+        false
+    });
+
     // Cargar historico al montar el componente
     let navigate = use_navigate();
 
@@ -524,9 +536,13 @@ pub fn TicketHistory() -> impl IntoView {
                                                                 <div>
                                                                     <div class="text-xs text-gray-500 mb-1">"Tienda"</div>
                                                                     <div class="text-gray-900">{tienda_str}</div>
-                                                                    {ubicacion_opt.map(|ubicacion| view! {
-                                                                        <div class="text-xs text-gray-500 mt-0.5">{ubicacion}</div>
-                                                                    })}
+                                                                    {move || if !is_demo_user.get() {
+                                                                        ubicacion_opt.clone().map(|ubicacion| view! {
+                                                                            <div class="text-xs text-gray-500 mt-0.5">{ubicacion}</div>
+                                                                        }.into_view()).unwrap_or_else(|| view! { <div/> }.into_view())
+                                                                    } else {
+                                                                        view! { <div/> }.into_view()
+                                                                    }}
                                                                 </div>
     
                                                                 // Total
