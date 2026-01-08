@@ -6,7 +6,7 @@ pub mod tickets;
 use serde::{Deserialize, Serialize};
 
 /// URL base del backend
-pub const API_BASE_URL: &str = "http://localhost:8000/api";
+pub const API_BASE_URL: &str = "/api";
 
 /// Estructura de error estándar de la API
 #[derive(Debug, Clone, Serialize, Deserialize)]
