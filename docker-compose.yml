@@ -4,16 +4,65 @@ services:
     container_name: mercastats_db
     restart: always
     environment:
-      - POSTGRES_DB=mercastats
-      - POSTGRES_USER=mercastats_user
-      - POSTGRES_PASSWORD=tu_password_seguro_vps
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
-      # Persistencia: los datos no se borran aunque apagues el contenedor
       - postgres_data:/var/lib/postgresql/data
-      # Inicialización automática: Docker ejecuta tu esquema al crear la BD
-      - ./sql/schema/schema.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./sql/schema/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/dockerfile
+    container_name: mercastats_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - BACKEND_HOST=0.0.0.0
+      - INTELLIGENCE_SERVICE_URL=http://intelligence-service:8001
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      intelligence-service:
+        condition: service_started
+
+  intelligence-service:
+    build:
+      context: ./intelligence-service
+      dockerfile: Dockerfile
+    container_name: mercastats_intelligence
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    ports:
+      - "${INTELLIGENCE_PORT:-8001}:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    container_name: mercastats_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_started
 
 volumes:
   postgres_data:
