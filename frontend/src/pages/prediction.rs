@@ -1,8 +1,8 @@
-use leptos::*;
-use gloo_timers::future::TimeoutFuture;
 use crate::api::prediction::{get_next_prediction, PredictionResult};
 use crate::components::ai_loader::AIGeneratingLoader;
 use crate::components::prediction_card::PredictionCard;
+use gloo_timers::future::TimeoutFuture;
+use leptos::*;
 
 #[component]
 pub fn Prediction() -> impl IntoView {
@@ -14,12 +14,12 @@ pub fn Prediction() -> impl IntoView {
         spawn_local(async move {
             // Artificial delay for "AI thinking" effect
             TimeoutFuture::new(1500).await;
-            
+
             match get_next_prediction().await {
                 Ok(res) => {
                     set_prediction.set(Some(res.prediction));
                     set_loading.set(false);
-                },
+                }
                 Err(e) => {
                     set_error.set(Some(e));
                     set_loading.set(false);

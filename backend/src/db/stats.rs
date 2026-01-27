@@ -17,6 +17,7 @@ pub struct TopProductItem {
     pub cantidad_total: Option<i64>,
     pub gasto_total: Option<Decimal>,
     pub precio_medio: Option<Decimal>,
+    pub precio_actual: Option<Decimal>,
 }
 
 /// Estadísticas de inflación personal (comparación de precios de productos favoritos)
@@ -76,12 +77,13 @@ pub async fn get_top_products_by_quantity(
             p.nombre,
             SUM(cp.cantidad)::bigint as "cantidad_total?",
             SUM(cp.precio_total)::numeric as "gasto_total?",
-            ROUND(AVG(cp.precio_unitario)::numeric, 2)::numeric as "precio_medio?"
+            ROUND(AVG(cp.precio_unitario)::numeric, 2)::numeric as "precio_medio?",
+            p.precio_actual as "precio_actual?"
         FROM compras c
         INNER JOIN compras_productos cp ON c.numero_factura = cp.compra_numero_factura
         INNER JOIN productos p ON cp.producto_nombre = p.nombre
         WHERE c.usuario_email = $1
-        GROUP BY p.nombre
+        GROUP BY p.nombre, p.precio_actual
         ORDER BY SUM(cp.cantidad) DESC
         LIMIT $2
         "#,
@@ -107,12 +109,13 @@ pub async fn get_top_products_by_spending(
             p.nombre,
             SUM(cp.cantidad)::bigint as "cantidad_total?",
             SUM(cp.precio_total)::numeric as "gasto_total?",
-            ROUND(AVG(cp.precio_unitario)::numeric, 2)::numeric as "precio_medio?"
+            ROUND(AVG(cp.precio_unitario)::numeric, 2)::numeric as "precio_medio?",
+            p.precio_actual as "precio_actual?"
         FROM compras c
         INNER JOIN compras_productos cp ON c.numero_factura = cp.compra_numero_factura
         INNER JOIN productos p ON cp.producto_nombre = p.nombre
         WHERE c.usuario_email = $1
-        GROUP BY p.nombre
+        GROUP BY p.nombre, p.precio_actual
         ORDER BY SUM(cp.precio_total) DESC
         LIMIT $2
         "#,

@@ -1,7 +1,7 @@
 use crate::api::get_auth_token;
 use crate::components::sidebar::DashboardView;
 use crate::components::Sidebar;
-use crate::pages::{MonthlyEvolution, Stats, TicketHistory, Upload, Prediction};
+use crate::pages::{MonthlyEvolution, Prediction, Stats, TicketHistory, Upload};
 use leptos::*;
 use leptos_router::use_navigate;
 

@@ -49,7 +49,8 @@ pub fn Login() -> impl IntoView {
                         if let Ok(Some(storage)) = window.local_storage() {
                             let _ = storage.set_item("auth_token", &response.token);
                             let _ = storage.set_item("user_email", &email_val);
-                            let _ = storage.set_item("user_is_demo", &response.user.is_demo.to_string());
+                            let _ = storage
+                                .set_item("user_is_demo", &response.user.is_demo.to_string());
                         }
                     }
 

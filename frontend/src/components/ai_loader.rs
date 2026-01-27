@@ -9,7 +9,7 @@ pub fn AIGeneratingLoader() -> impl IntoView {
                 <div class="h-8 bg-gray-100 rounded w-1/3 animate-pulse relative overflow-hidden">
                     <div class="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/50 to-transparent"></div>
                 </div>
-                
+
                 // Text lines shimmer
                 <div class="space-y-2">
                     <div class="h-4 bg-gray-100 rounded w-full animate-pulse relative overflow-hidden">
@@ -33,7 +33,7 @@ pub fn AIGeneratingLoader() -> impl IntoView {
                     </div>
                 </div>
             </div>
-            
+
             <div class="mt-6 flex items-center justify-center text-sm text-gray-500 gap-2">
                 <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

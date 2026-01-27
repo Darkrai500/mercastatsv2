@@ -30,7 +30,7 @@ pub fn TicketHistory() -> impl IntoView {
     let (sort_by, set_sort_by) = create_signal(SortBy::Date);
     let (sort_order, set_sort_order) = create_signal(SortOrder::Descending);
     let (dropdown_open, set_dropdown_open) = create_signal(false);
-    
+
     // Paginación
     let (current_page, set_current_page) = create_signal(1);
     const ITEMS_PER_PAGE: usize = 15;
@@ -98,14 +98,18 @@ pub fn TicketHistory() -> impl IntoView {
                     tickets.sort_by(|a, b| {
                         let price_a: f64 = a.total.parse().unwrap_or(0.0);
                         let price_b: f64 = b.total.parse().unwrap_or(0.0);
-                        price_a.partial_cmp(&price_b).unwrap_or(std::cmp::Ordering::Equal)
+                        price_a
+                            .partial_cmp(&price_b)
+                            .unwrap_or(std::cmp::Ordering::Equal)
                     });
                 }
                 (SortBy::Price, SortOrder::Descending) => {
                     tickets.sort_by(|a, b| {
                         let price_a: f64 = a.total.parse().unwrap_or(0.0);
                         let price_b: f64 = b.total.parse().unwrap_or(0.0);
-                        price_b.partial_cmp(&price_a).unwrap_or(std::cmp::Ordering::Equal)
+                        price_b
+                            .partial_cmp(&price_a)
+                            .unwrap_or(std::cmp::Ordering::Equal)
                     });
                 }
             }
@@ -134,11 +138,11 @@ pub fn TicketHistory() -> impl IntoView {
             let page = current_page.get();
             let start = (page - 1) * ITEMS_PER_PAGE;
             let end = std::cmp::min(start + ITEMS_PER_PAGE, tickets.len());
-            
+
             if start >= tickets.len() {
                 return Vec::new();
             }
-            
+
             tickets[start..end].to_vec()
         })
     };
@@ -148,7 +152,7 @@ pub fn TicketHistory() -> impl IntoView {
         let total = total_pages();
         let current = current_page.get();
         let mut pages = Vec::new();
-        
+
         if total <= 7 {
             for i in 1..=total {
                 pages.push(i);
@@ -502,7 +506,7 @@ pub fn TicketHistory() -> impl IntoView {
                                         {move || {
                                             // Obtener tickets paginados
                                             let tickets = paginated_tickets().unwrap_or_else(Vec::new);
-    
+
                                             tickets.into_iter().enumerate().map(|(index, ticket)| {
                                                 let numero_factura = ticket.numero_factura.clone();
                                                 let fecha_str = ticket.fecha_hora.split('T').next().unwrap_or(&ticket.fecha_hora).to_string();
@@ -510,11 +514,11 @@ pub fn TicketHistory() -> impl IntoView {
                                                 let ubicacion_opt = ticket.ubicacion.clone();
                                                 let total_str = ticket.total.clone();
                                                 let num_productos_str = ticket.num_productos.map(|n| format!("{} productos", n)).unwrap_or_else(|| "N/A".to_string());
-                                                
+
                                                 let delay = index as u64 * 75; // 75ms delay per item
-    
+
                                                 view! {
-                                                    <div 
+                                                    <div
                                                         class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 animate-slide-up"
                                                         style=format!("animation-delay: {}ms", delay)
                                                     >
@@ -525,13 +529,13 @@ pub fn TicketHistory() -> impl IntoView {
                                                                     <div class="text-xs text-gray-500 mb-1">"Factura"</div>
                                                                     <div class="font-semibold text-gray-900">{numero_factura}</div>
                                                                 </div>
-    
+
                                                                 // Fecha
                                                                 <div>
                                                                     <div class="text-xs text-gray-500 mb-1">"Fecha"</div>
                                                                     <div class="text-gray-900">{fecha_str}</div>
                                                                 </div>
-    
+
                                                                 // Tienda
                                                                 <div>
                                                                     <div class="text-xs text-gray-500 mb-1">"Tienda"</div>
@@ -544,7 +548,7 @@ pub fn TicketHistory() -> impl IntoView {
                                                                         view! { <div/> }.into_view()
                                                                     }}
                                                                 </div>
-    
+
                                                                 // Total
                                                                 <div class="text-right">
                                                                     <div class="text-xs text-gray-500 mb-1">"Total"</div>
@@ -560,7 +564,7 @@ pub fn TicketHistory() -> impl IntoView {
                                             }).collect_view()
                                         }}
                                     </div>
-                                    
+
                                     // Paginación Inferior
                                     {render_pagination(true)}
                                 </div>

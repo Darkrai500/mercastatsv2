@@ -132,20 +132,14 @@ pub async fn get_monthly_evolution(months: u32) -> Result<MonthlyEvolutionRespon
             .await
             .map(|e| e.error)
             .unwrap_or_else(|_| {
-                format!(
-                    "Error {}: No se pudo obtener la evolucion mensual",
-                    status
-                )
+                format!("Error {}: No se pudo obtener la evolucion mensual", status)
             });
         Err(error)
     }
 }
 
 /// Obtener todos los productos ordenados por criterio
-pub async fn get_all_products(
-    sort_by: &str,
-    limit: i64,
-) -> Result<Vec<TopProductItem>, String> {
+pub async fn get_all_products(sort_by: &str, limit: i64) -> Result<Vec<TopProductItem>, String> {
     let token = get_auth_token().ok_or_else(|| "No hay sesion activa".to_string())?;
     let url = format!(
         "{}/stats/products?sort_by={}&limit={}",
@@ -170,12 +164,8 @@ pub async fn get_all_products(
             .await
             .map(|e| e.error)
             .unwrap_or_else(|_| {
-                format!(
-                    "Error {}: No se pudo obtener la lista de productos",
-                    status
-                )
+                format!("Error {}: No se pudo obtener la lista de productos", status)
             });
         Err(error)
     }
 }
-

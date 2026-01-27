@@ -203,7 +203,11 @@ pub async fn process_ticket_ocr(file: File, ingest: bool) -> Result<ProcessTicke
     let file_name = file.name();
     let mime_type = {
         let mt = file.type_();
-        if mt.is_empty() { None } else { Some(mt) }
+        if mt.is_empty() {
+            None
+        } else {
+            Some(mt)
+        }
     };
 
     // Convertir archivo a base64

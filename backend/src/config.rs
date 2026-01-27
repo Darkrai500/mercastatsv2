@@ -33,8 +33,9 @@ impl AppConfig {
         let intelligence_service_url = std::env::var("INTELLIGENCE_SERVICE_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:8001".to_string());
 
-        let intelligence_api_key =
-            std::env::var("INTELLIGENCE_API_KEY").ok().filter(|v| !v.is_empty());
+        let intelligence_api_key = std::env::var("INTELLIGENCE_API_KEY")
+            .ok()
+            .filter(|v| !v.is_empty());
 
         let intelligence_timeout_secs = std::env::var("INTELLIGENCE_TIMEOUT_SECS")
             .ok()
@@ -55,7 +56,9 @@ impl AppConfig {
             intelligence_api_key,
             intelligence_timeout_secs,
             intelligence_max_retries,
-            demo_user_email: std::env::var("DEMO_USER_EMAIL").ok().filter(|v| !v.is_empty()),
+            demo_user_email: std::env::var("DEMO_USER_EMAIL")
+                .ok()
+                .filter(|v| !v.is_empty()),
         })
     }
 

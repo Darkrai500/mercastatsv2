@@ -1,11 +1,9 @@
+use crate::api::prediction::PredictionResult;
 use chrono::{DateTime, FixedOffset};
 use leptos::*;
-use crate::api::prediction::PredictionResult;
 
 #[component]
-pub fn PredictionCard(
-    #[prop(into)] prediction: PredictionResult
-) -> impl IntoView {
+pub fn PredictionCard(#[prop(into)] prediction: PredictionResult) -> impl IntoView {
     let has_products = !prediction.suggested_products.is_empty();
     let formatted_date = prediction
         .timestamp
@@ -48,7 +46,7 @@ pub fn PredictionCard(
                                             {move || if product.price_estimation > 0.0 {
                                                 view! {
                                                     <div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary-50 text-primary-700 text-xs font-semibold">
-                                                        <span>{"Precio medio ticket:"}</span>
+                                                        <span>{"Precio:"}</span>
                                                         <span>{format!("{:.2}€", product.price_estimation)}</span>
                                                     </div>
                                                 }.into_view()

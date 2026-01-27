@@ -131,11 +131,7 @@ pub async fn process_ticket(
     };
 
     // 3. Construir respuesta
-    let raw_preview = ocr_result
-        .raw_text
-        .chars()
-        .take(320)
-        .collect::<String>();
+    let raw_preview = ocr_result.raw_text.chars().take(320).collect::<String>();
 
     let response = TicketProcessAndIngestResponse {
         ocr: OcrResponseSummary {

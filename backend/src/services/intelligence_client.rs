@@ -104,7 +104,8 @@ impl IntelligenceClient {
 
             match request.send().await {
                 Ok(resp) => {
-                    if resp.status() == StatusCode::SERVICE_UNAVAILABLE && attempt < self.max_retries
+                    if resp.status() == StatusCode::SERVICE_UNAVAILABLE
+                        && attempt < self.max_retries
                     {
                         attempt += 1;
                         sleep(Duration::from_millis(200 * attempt as u64)).await;

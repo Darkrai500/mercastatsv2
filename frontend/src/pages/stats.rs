@@ -1,6 +1,6 @@
-use leptos::*;
 use crate::api::stats::*;
 use crate::components::{Chart, ChartSeriesData, ChartType, KpiCard, ProductListModal};
+use leptos::*;
 
 #[component]
 pub fn Stats() -> impl IntoView {
@@ -256,8 +256,7 @@ where
     let product_values: Vec<f64> = products
         .iter()
         .map(|p| {
-            parse_decimal(&p.gasto_total.clone().unwrap_or_else(|| "0".to_string()))
-                .unwrap_or(0.0)
+            parse_decimal(&p.gasto_total.clone().unwrap_or_else(|| "0".to_string())).unwrap_or(0.0)
         })
         .collect();
 

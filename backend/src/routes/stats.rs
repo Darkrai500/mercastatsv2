@@ -101,10 +101,7 @@ pub async fn get_monthly_evolution(
 
     let months_data = get_monthly_spending(&state.db_pool, &user_email, months).await?;
 
-    let current_total = months_data
-        .last()
-        .map(|m| m.total)
-        .unwrap_or(Decimal::ZERO);
+    let current_total = months_data.last().map(|m| m.total).unwrap_or(Decimal::ZERO);
     let previous_total = months_data
         .iter()
         .rev()

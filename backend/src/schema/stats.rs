@@ -49,4 +49,3 @@ pub struct MonthlyEvolutionResponse {
     pub year_to_date_total: Decimal,
     pub month_over_month: f64,
 }
-

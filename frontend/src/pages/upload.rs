@@ -36,7 +36,8 @@ pub fn Upload() -> impl IntoView {
     let (review_modal_open, set_review_modal_open) = create_signal(false);
 
     let review_files = create_memo(move |_| {
-        files.get()
+        files
+            .get()
             .into_iter()
             .filter(|f| f.status == UploadStatus::Review)
             .collect::<Vec<_>>()
@@ -83,14 +84,20 @@ pub fn Upload() -> impl IntoView {
                     return true;
                 }
                 batch_ids.iter().all(|batch_id| {
-                    files.iter()
+                    files
+                        .iter()
                         .find(|f| &f.id == batch_id)
-                        .map(|f| matches!(f.status, UploadStatus::Success | UploadStatus::Error | UploadStatus::Review))
+                        .map(|f| {
+                            matches!(
+                                f.status,
+                                UploadStatus::Success | UploadStatus::Error | UploadStatus::Review
+                            )
+                        })
                         .unwrap_or(true) // If file was removed, consider it done
                 })
             })
         });
-        
+
         if batch_complete {
             set_processing.set(false);
             set_processing_batch.set(HashSet::new());
@@ -169,13 +176,16 @@ pub fn Upload() -> impl IntoView {
 
     let process_file = move |file_status: FileStatus, ingest: bool| {
         if is_demo.get() {
-            set_upload_error.set(Some("Como usuario demo no puedes insertar tickets. Crea un usuario para poder hacerlo.".to_string()));
+            set_upload_error.set(Some(
+                "Como usuario demo no puedes insertar tickets. Crea un usuario para poder hacerlo."
+                    .to_string(),
+            ));
             return;
         }
 
         let id = file_status.id.clone();
         let file_clone = file_status.file.clone();
-        
+
         spawn_local(async move {
             // Update status to processing or ingesting
             set_files.update(|files| {
@@ -210,7 +220,7 @@ pub fn Upload() -> impl IntoView {
                     } else {
                         err
                     };
-                    
+
                     set_files.update(|files| {
                         if let Some(f) = files.iter_mut().find(|f| f.id == id) {
                             f.status = UploadStatus::Error;
@@ -221,7 +231,7 @@ pub fn Upload() -> impl IntoView {
                     refresh_review_modal();
                 }
             }
-            
+
             // Check if batch is complete and reset processing state
             if !ingest {
                 check_and_reset_batch();
@@ -229,37 +239,35 @@ pub fn Upload() -> impl IntoView {
         });
     };
     let handle_process_all = move |_| {
-        let pending_files: Vec<FileStatus> = files.get()
+        let pending_files: Vec<FileStatus> = files
+            .get()
             .into_iter()
             .filter(|f| f.status == UploadStatus::Pending || f.status == UploadStatus::Error)
             .collect();
-            
+
         if pending_files.is_empty() {
             return;
         }
 
         // Capture IDs of files in this batch
-        let batch_ids: HashSet<String> = pending_files.iter()
-            .map(|f| f.id.clone())
-            .collect();
-        
+        let batch_ids: HashSet<String> = pending_files.iter().map(|f| f.id.clone()).collect();
+
         set_processing_batch.set(batch_ids);
         set_processing.set(true);
-        
+
         for file in pending_files {
             process_file(file, false);
         }
     };
 
-    let confirm_file = move |id: String| {
-        if let Some(target) = files
-            .get()
-            .into_iter()
-            .find(|f| f.id == id && matches!(f.status, UploadStatus::Review | UploadStatus::Error))
-        {
-            process_file(target, true);
-        }
-    };
+    let confirm_file =
+        move |id: String| {
+            if let Some(target) = files.get().into_iter().find(|f| {
+                f.id == id && matches!(f.status, UploadStatus::Review | UploadStatus::Error)
+            }) {
+                process_file(target, true);
+            }
+        };
 
     let remove_file = move |id: String| {
         set_files.update(|files| {
@@ -271,7 +279,7 @@ pub fn Upload() -> impl IntoView {
                 files.remove(index);
             }
         });
-        
+
         // Remove from processing batch and check if batch is now complete
         set_processing_batch.update(|batch| {
             batch.remove(&id);
@@ -283,12 +291,13 @@ pub fn Upload() -> impl IntoView {
     let clear_completed = move |_| {
         // Collect IDs of completed files before removing them
         let completed_ids: Vec<String> = files.with(|files| {
-            files.iter()
+            files
+                .iter()
                 .filter(|f| f.status == UploadStatus::Success)
                 .map(|f| f.id.clone())
                 .collect()
         });
-        
+
         set_files.update(|files| {
             files.retain(|f| {
                 if f.status == UploadStatus::Success {
@@ -301,7 +310,7 @@ pub fn Upload() -> impl IntoView {
                 }
             });
         });
-        
+
         // Remove completed files from processing batch and check if batch is now complete
         set_processing_batch.update(|batch| {
             for id in completed_ids {
@@ -394,7 +403,7 @@ pub fn Upload() -> impl IntoView {
                                         let has_success = files.get().iter().any(|f| f.status == UploadStatus::Success);
                                         if has_success {
                                             view! {
-                                                <button 
+                                                <button
                                                     class="text-sm text-primary-600 hover:text-primary-700 font-medium"
                                                     on:click=clear_completed
                                                 >
@@ -415,7 +424,7 @@ pub fn Upload() -> impl IntoView {
                                             let status = file.status.clone();
                                             let error = file.error.clone();
                                             let result = file.result.clone();
-                                            
+
                                             view! {
                                                 <div class="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200 group hover:border-gray-300 transition-colors">
                                                     // Preview/Icon
@@ -430,7 +439,7 @@ pub fn Upload() -> impl IntoView {
                                                             }.into_view()
                                                         }}
                                                     </div>
-                                                    
+
                                                     // Info
                                                     <div class="flex-grow min-w-0 mr-4">
                                                         <p class="text-sm font-medium text-gray-900 truncate">
@@ -445,10 +454,10 @@ pub fn Upload() -> impl IntoView {
                                                                 UploadStatus::Success => {
                                                                     if let Some(ref res) = result {
                                                                         if let Some(ingestion) = &res.ingestion {
-                                                                            view! { 
+                                                                            view! {
                                                                                 <span class="text-green-600 font-medium">
                                                                                     {format!("Guardado: {:.2}€ ({} prods)", res.ocr.total.unwrap_or(0.0), ingestion.productos.len())}
-                                                                                </span> 
+                                                                                </span>
                                                                             }.into_view()
                                                                         } else {
                                                                             view! { <span class="text-yellow-600">"Procesado (Solo OCR)"</span> }.into_view()
@@ -476,7 +485,7 @@ pub fn Upload() -> impl IntoView {
                                                     <div class="flex-shrink-0">
                                                         {match status {
                                                             UploadStatus::Pending => view! {
-                                                                <button 
+                                                                <button
                                                                     class="p-1 text-gray-400 hover:text-red-500 transition-colors"
                                                                     on:click=move |_| remove_file(id.clone())
                                                                     title="Eliminar"
@@ -504,7 +513,7 @@ pub fn Upload() -> impl IntoView {
                                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                                         </svg>
                                                                     </button>
-                                                                    <button 
+                                                                    <button
                                                                         class="p-1 text-gray-400 hover:text-red-500 transition-colors"
                                                                         on:click=move |_| remove_file(id.clone())
                                                                         title="Eliminar"
@@ -527,7 +536,7 @@ pub fn Upload() -> impl IntoView {
                                                                 </svg>
                                                             }.into_view(),
                                                             UploadStatus::Error => view! {
-                                                                <button 
+                                                                <button
                                                                     class="p-1 text-red-500 hover:text-red-700 transition-colors"
                                                                     on:click=move |_| remove_file(id.clone())
                                                                     title="Eliminar"
@@ -555,7 +564,7 @@ pub fn Upload() -> impl IntoView {
                         {move || if !files.get().is_empty() {
                             let has_pending = files.get().iter().any(|f| f.status == UploadStatus::Pending || f.status == UploadStatus::Error);
                             let review_count = files.get().iter().filter(|f| f.status == UploadStatus::Review).count();
-                            
+
                             view! {
                                 <>
                                     {move || if review_count > 0 {
@@ -825,8 +834,5 @@ fn is_allowed_file(file: &File) -> bool {
 
     let name = file.name().to_lowercase();
     let allowed_extensions = ["pdf", "png", "jpg", "jpeg", "webp", "heic", "heif"];
-    allowed_extensions
-        .iter()
-        .any(|ext| name.ends_with(ext))
+    allowed_extensions.iter().any(|ext| name.ends_with(ext))
 }
-

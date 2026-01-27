@@ -9,12 +9,10 @@ pub fn MonthlyEvolution() -> impl IntoView {
     let monthly_data = create_resource(
         move || months_filter.get(),
         |months| async move {
-            get_monthly_evolution(months)
-                .await
-                .map_err(|e| {
-                    leptos::logging::error!("Error cargando evolucion mensual: {}", e);
-                    e
-                })
+            get_monthly_evolution(months).await.map_err(|e| {
+                leptos::logging::error!("Error cargando evolucion mensual: {}", e);
+                e
+            })
         },
     );
 
@@ -91,7 +89,9 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32) -> impl In
     let filtered_months: Vec<_> = if months_filter == 999 {
         // All Time mode: Dynamic filtering
         // First, filter out months with zero spending
-        let non_zero_months: Vec<_> = data.months.iter()
+        let non_zero_months: Vec<_> = data
+            .months
+            .iter()
             .filter(|m| {
                 let val = parse_decimal(&m.total).unwrap_or(0.0);
                 val > 0.001
@@ -102,7 +102,8 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32) -> impl In
         // If we have many months (> 12), start filtering by average
         if non_zero_months.len() > 12 {
             // Calculate average from non-zero months
-            let sum: f64 = non_zero_months.iter()
+            let sum: f64 = non_zero_months
+                .iter()
                 .map(|m| parse_decimal(&m.total).unwrap_or(0.0))
                 .sum();
             let avg = if !non_zero_months.is_empty() {
@@ -112,7 +113,8 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32) -> impl In
             };
 
             // Filter: only show months with spending >= average
-            non_zero_months.into_iter()
+            non_zero_months
+                .into_iter()
                 .filter(|m| {
                     let val = parse_decimal(&m.total).unwrap_or(0.0);
                     val >= avg
@@ -146,10 +148,7 @@ fn MonthlyContent(data: MonthlyEvolutionResponse, months_filter: u32) -> impl In
     leptos::logging::log!("Values: {:?}", values);
 
     let peak_value = values.iter().copied().fold(0.0, f64::max);
-    let trough_value = values
-        .iter()
-        .copied()
-        .fold(f64::INFINITY, f64::min);
+    let trough_value = values.iter().copied().fold(f64::INFINITY, f64::min);
 
     // Calculate moving average - always on the filtered values shown in the table
     // Round each value to 2 decimals

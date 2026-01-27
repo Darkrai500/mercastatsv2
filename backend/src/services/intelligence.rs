@@ -52,14 +52,16 @@ impl IntelligenceService {
 
         // 2. Calculate "Current" state features
         let now = Utc::now();
-        
+
         // Calculate days since last shop based on the most recent history item
         let days_since = if let Some(last) = history.first() {
             if let Some(last_date_str) = &last.fecha_hora {
-                if let Ok(last_date) = chrono::NaiveDateTime::parse_from_str(last_date_str, "%Y-%m-%dT%H:%M:%S") {
-                     let now_naive = now.naive_utc();
-                     let duration = now_naive - last_date;
-                     duration.num_seconds() as f64 / 86400.0
+                if let Ok(last_date) =
+                    chrono::NaiveDateTime::parse_from_str(last_date_str, "%Y-%m-%dT%H:%M:%S")
+                {
+                    let now_naive = now.naive_utc();
+                    let duration = now_naive - last_date;
+                    duration.num_seconds() as f64 / 86400.0
                 } else {
                     0.0
                 }
@@ -77,7 +79,7 @@ impl IntelligenceService {
         // But that's not quite right for "now".
         // Let's assume 0 for now or reuse last ticket's values if very recent.
         let (total_30d, tickets_30d) = if let Some(last) = history.first() {
-             (last.total_last_30d, last.tickets_last_30d)
+            (last.total_last_30d, last.tickets_last_30d)
         } else {
             (0.0, 0)
         };
@@ -90,7 +92,7 @@ impl IntelligenceService {
             day_of_month: now.day() as i32,
             hour_of_day: now.hour() as i32,
             days_since_last_shop: days_since,
-            total_last_30d: total_30d, 
+            total_last_30d: total_30d,
             tickets_last_30d: tickets_30d,
             is_payday_week: now.day() <= 7,
         };
@@ -125,9 +127,11 @@ impl IntelligenceService {
                 .map(|p| {
                     let qty = p.cantidad_total.unwrap_or(1) as f64;
                     let probability = if max_qty > 0.0 { qty / max_qty } else { 0.5 };
+
+                    // Usar precio_actual si existe, si no, usar precio_medio
                     let price = p
-                        .precio_medio
-                        .as_ref()
+                        .precio_actual
+                        .or(p.precio_medio)
                         .and_then(|d| d.to_string().parse::<f64>().ok())
                         .unwrap_or(0.0);
 

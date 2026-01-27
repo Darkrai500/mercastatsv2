@@ -1,6 +1,6 @@
-use leptos::*;
 use crate::api::stats::{get_all_products, TopProductItem};
 use crate::components::{Chart, ChartSeriesData, ChartType};
+use leptos::*;
 
 /// Height in pixels allocated for each product bar in the horizontal bar chart.
 /// This ensures adequate spacing for product labels and bar visibility.
