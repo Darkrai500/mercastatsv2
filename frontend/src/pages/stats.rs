@@ -195,14 +195,14 @@ fn TendenciaChart(daily_data: Vec<DailySpendPoint>) -> impl IntoView {
     view! {
         <div class="bg-white rounded-lg border border-gray-100 p-6 shadow-sm">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">
-                "?? Tendencia de Gasto (£ltimos 30 d¡as)"
+                "📈 Tendencia de Gasto (Últimos 30 días)"
             </h2>
 
             {if has_no_data {
                 view! {
                     <div class="flex items-center justify-center h-64 text-gray-500">
                         <div class="text-center space-y-1">
-                            <p class="text-base font-semibold text-gray-900">"A˙n no hay datos para mostrar"</p>
+                            <p class="text-base font-semibold text-gray-900">"Aún no hay datos para mostrar"</p>
                             <p class="text-sm">"Sube un ticket para ver tu tendencia de gasto"</p>
                         </div>
                     </div>

@@ -33,12 +33,10 @@ Para mantener la simplicidad y privacidad en este entorno de demostración:
 
 ## 📸 Galería del Proyecto
 
-_(El diseño sigue una filosofía minimalista inspirada en interfaces como Linear o Stripe)_
-
-|                        Dashboard Principal                        |                       Detalle de Análisis                       |
-| :---------------------------------------------------------------: | :-------------------------------------------------------------: |
-| ![Dashboard Screenshot](./docs/screenshots/dashboard_preview.png) | ![Analysis Screenshot](./docs/screenshots/analysis_preview.png) |
-|               _Visualización de métricas de gasto_                |                    _Desglose por categorías_                    |
+|                    Dashboard Principal                     |                  Detalle de Análisis                  |
+| :--------------------------------------------------------: | :---------------------------------------------------: |
+| ![Dashboard Screenshot](../docs/screenshots/Dashboard.png) | ![Analysis Screenshot](../docs/screenshots/Stats.png) |
+|      _Visualización de Dashboard de carga de tickets_      |              _Vista de las estadísticas_              |
 
 ---
 
