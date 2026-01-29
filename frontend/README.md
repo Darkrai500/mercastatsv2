@@ -1,343 +1,176 @@
-# Mercastats Frontend
-
-Frontend de la aplicación Mercastats construido con **Leptos** (Rust + WebAssembly) y **Tailwind CSS**.
-
-## 🎨 Diseño
-
-El frontend sigue una filosofía de diseño **minimalista y moderno** inspirada en:
-
-- **Apple** - Espacios en blanco, tipografía limpia
-- **Linear** - Interfaz focalizada, animaciones sutiles
-- **Stripe** - Profesional, datos como protagonistas
-
-### Características visuales
-
-- ✨ Animaciones sutiles (fade-in, slide-up)
-- 🎨 Paleta de colores moderna (azul primary, morado accent)
-- 📱 Diseño responsive (mobile-first)
-- 🌓 Preparado para dark mode (futuro)
-- ♿ Accesibilidad (ARIA labels, contraste)
-
-## 📁 Estructura del Proyecto
-
-```
-frontend/
-├── src/
-│   ├── main.rs              # Punto de entrada, configuración del router
-│   ├── components/          # Componentes reutilizables
-│   │   ├── mod.rs
-│   │   ├── button.rs        # Botón con variantes (primary, outline, ghost)
-│   │   ├── input.rs         # Input con validación y errores
-│   │   └── card.rs          # Contenedor con sombra y padding
-│   ├── pages/               # Páginas/vistas
-│   │   ├── mod.rs
-│   │   ├── login.rs         # Página de inicio de sesión
-│   │   └── upload.rs        # Página de subida de tickets
-│   └── api/                 # Cliente API para backend
-│       ├── mod.rs           # Configuración base (URL, tokens)
-│       ├── auth.rs          # Endpoints de autenticación
-│       └── tickets.rs       # Endpoints de tickets
-├── index.html               # HTML base con Tailwind CDN
-├── Trunk.toml               # Configuración de Trunk (build tool)
-├── Cargo.toml               # Dependencias del frontend
-└── README.md                # Este archivo
-```
-
-## 🚀 Instalación y Ejecución
-
-### Prerrequisitos
-
-```powershell
-# Instalar Trunk (build tool para Leptos)
-cargo install trunk
-
-# Instalar wasm-bindgen-cli
-cargo install wasm-bindgen-cli
-
-# Agregar target wasm32
-rustup target add wasm32-unknown-unknown
-```
-
-### Desarrollo
-
-```powershell
-# Navegar al directorio del frontend
-cd frontend
-
-# Ejecutar en modo desarrollo (con hot-reload)
-trunk serve
-
-# La aplicación estará disponible en:
-# http://127.0.0.1:3000
-```
-
-El comando `trunk serve` hace:
-- Compila el código Rust a WebAssembly
-- Inicia un servidor de desarrollo con hot-reload
-- Proxy para requests a la API del backend (localhost:8000)
-
-### Build para Producción
-
-```powershell
-# Build optimizado
-trunk build --release
-
-# Los archivos se generan en frontend/dist/
-# - index.html
-# - *.wasm (WebAssembly binary)
-# - *.js (JavaScript glue code)
-```
-
-## 🎯 Páginas Implementadas
-
-### 1. Login (`/`)
-
-Página de inicio de sesión con:
-- Formulario de email/password con validación
-- Mensaje de error/éxito
-- Checkbox "Recordarme"
-- Botón de "Olvidé mi contraseña"
-- Botón de login con Google (placeholder)
-- Link de registro
-
-**Características:**
-- Validación en cliente (email válido, campos requeridos)
-- Almacena token JWT en localStorage
-- Redirección automática a `/upload` tras login exitoso
-
-### 2. Upload (`/upload`)
-
-Página principal de la aplicación con:
-- Header con logo y botón de logout
-- Área de drag & drop para subir tickets
-- Preview de imágenes
-- Información del archivo seleccionado
-- Botones de subir/cancelar
-- Cards con estadísticas (tickets, gasto, productos)
-- Sección de consejos y privacidad
-
-**Características:**
-- Protección de ruta (redirección a `/` si no hay sesión)
-- Drag & drop de archivos
-- Soporte para PDF e imágenes
-- Preview en tiempo real para imágenes
-- Validación de tamaño (max 10MB)
-- Feedback visual (loading, success, error)
-
-### 3. Not Found (`/*any`)
-
-Página de error 404 con diseño minimalista y botón para volver al inicio.
-
-## 🧩 Componentes Reutilizables
-
-### Button
-
-Componente de botón con múltiples variantes:
-
-```rust
-use crate::components::{Button, ButtonVariant};
-
-<Button
-    variant=ButtonVariant::Primary  // Primary, Secondary, Outline, Ghost
-    full_width=true
-    loading=false
-    disabled=false
-    on_click=Some(Box::new(|| { /* handler */ }))
->
-    "Texto del botón"
-</Button>
-```
-
-### Input
-
-Componente de input con label, validación y errores:
-
-```rust
-use crate::components::Input;
-
-<Input
-    label=Some("Email".to_string())
-    placeholder="tu@email.com".to_string()
-    input_type="email".to_string()
-    value=create_rw_signal(String::new())
-    error=Some("Email inválido".to_string())
-    required=true
-    name=Some("email".to_string())
-/>
-```
-
-### Card
-
-Contenedor con sombra y bordes redondeados:
-
-```rust
-use crate::components::Card;
-
-<Card title=Some("Título".to_string()) padding=true>
-    <p>"Contenido de la tarjeta"</p>
-</Card>
-```
-
-## 🔌 Cliente API
-
-### Autenticación
-
-```rust
-use crate::api::auth::{login_user, LoginRequest};
-
-let request = LoginRequest {
-    email: "usuario@email.com".to_string(),
-    password: "password123".to_string(),
-};
-
-match login_user(request).await {
-    Ok(response) => {
-        // response.token - JWT token
-        // response.user.email - Email del usuario
-    }
-    Err(error) => {
-        // Manejo de error
-    }
-}
-```
-
-### Tickets
-
-```rust
-use crate::api::tickets::upload_ticket;
-use web_sys::File;
-
-match upload_ticket(file).await {
-    Ok(response) => {
-        // response.ticket_id - ID del ticket subido
-        // response.message - Mensaje de confirmación
-    }
-    Err(error) => {
-        // Manejo de error
-    }
-}
-```
-
-## 🎨 Customización de Estilos
-
-El proyecto usa **Tailwind CSS** vía CDN (modo desarrollo). Para producción, se recomienda:
-
-1. Instalar Tailwind localmente:
-
-```powershell
-npm init -y
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init
-```
-
-2. Configurar `tailwind.config.js`:
-
-```javascript
-module.exports = {
-  content: ["./src/**/*.rs", "./index.html"],
-  theme: {
-    extend: {
-      colors: {
-        primary: { /* colores personalizados */ },
-        accent: { /* colores personalizados */ },
-      },
-    },
-  },
-};
-```
-
-3. Crear `style/input.css`:
-
-```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
-
-4. Actualizar `index.html` para usar el CSS generado.
-
-## 🐛 Debugging
-
-### Logs en consola
-
-```rust
-use log::info;
-
-info!("Mensaje de debug");
-```
-
-Los logs aparecen en la consola del navegador (F12).
-
-### Inspeccionar WebAssembly
-
-1. Abrir DevTools (F12)
-2. Ir a la pestaña "Sources"
-3. Buscar archivos `.wasm`
-4. Usar breakpoints en código Rust
-
-## 🔒 Autenticación y Seguridad
-
-- Los tokens JWT se almacenan en **localStorage**
-- El token se envía en el header `Authorization: Bearer <token>`
-- Las rutas protegidas redirigen a `/` si no hay token
-- Errores 401 del backend limpian el localStorage
-
-### Mejoras futuras:
-
-- Usar **httpOnly cookies** en lugar de localStorage
-- Implementar **refresh tokens**
-- Agregar **CSRF protection**
-- Implementar **rate limiting** en el cliente
-
-## 📦 Dependencias Principales
-
-| Crate            | Versión | Descripción                            |
-| ---------------- | ------- | -------------------------------------- |
-| leptos           | 0.6     | Framework reactivo                     |
-| leptos_router    | 0.6     | Enrutamiento SPA                       |
-| leptos_meta      | 0.6     | Meta tags (SEO)                        |
-| gloo-net         | 0.5     | HTTP client para WebAssembly           |
-| serde            | 1.0     | Serialización JSON                     |
-| wasm-bindgen     | 0.2     | Bindings JavaScript ↔ Rust             |
-| web-sys          | 0.3     | APIs del navegador (DOM, localStorage) |
-| console_log      | 1.0     | Logging en consola del navegador       |
-
-## 🚧 Roadmap
-
-### Implementado ✅
-
-- [x] Setup del proyecto con Leptos
-- [x] Componentes base (Button, Input, Card)
-- [x] Página de Login
-- [x] Página de Upload de tickets
-- [x] Cliente API (auth, tickets)
-- [x] Enrutamiento básico
-- [x] Manejo de errores
-- [x] Diseño responsive
-
-### Pendiente 📋
-
-- [ ] Dashboard con estadísticas
-- [ ] Gráficos interactivos (Chart.js o Plotters)
-- [ ] Lista de tickets históricos
-- [ ] Detalle de ticket individual
-- [ ] Página de perfil de usuario
-- [ ] Dark mode
-- [ ] Tests unitarios e integración
-- [ ] Internacionalización (i18n)
-- [ ] PWA (Progressive Web App)
-- [ ] Optimización de bundle size
-
-## 📞 Soporte
-
-Para problemas o preguntas:
-
-1. Revisa la [documentación de Leptos](https://leptos-rs.github.io/leptos/)
-2. Revisa la [documentación de Trunk](https://trunkrs.dev/)
-3. Consulta el archivo `CLAUDE.md` en la raíz del proyecto
+# 🛒 Mercastats
+
+[![Rust](https://img.shields.io/badge/Backend-Rust-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
+[![Python](https://img.shields.io/badge/Microservice-Python-blue?style=flat&logo=python)](https://www.python.org/)
+[![Leptos](<https://img.shields.io/badge/Frontend-Leptos%20(WASM)-red?style=flat&logo=webassembly>)](https://leptos.dev/)
+[![Docker](https://img.shields.io/badge/Infra-Docker-2496ED?style=flat&logo=docker)](https://www.docker.com/)
+[![PostgreSQL](https://img.shields.io/badge/Data-PostgreSQL-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
+
+> **Plataforma de análisis de gastos y hábitos de consumo basada en tickets digitales.**
+> Un ejercicio de ingeniería de sistemas enfocado en arquitectura de microservicios, orquestación y flujos de datos modernos.
 
 ---
 
-**Última actualización**: 24 de octubre de 2025
-**Versión**: 0.1.0
-**Autor**: Juan Carlos
+## 🚀 Demo en Vivo y Acceso Rápido
+
+Puedes probar la aplicación desplegada ahora mismo. No es necesario usar tu correo real.
+
+🔗 **URL:** [http://54.37.231.34/](http://54.37.231.34/)
+
+| Rol              | Email           | Contraseña |
+| :--------------- | :-------------- | :--------- |
+| **Usuario Demo** | `demo@demo.com` | `demodemo` |
+
+### ⚠️ Limitaciones Importantes de la Demo
+
+Para mantener la simplicidad y privacidad en este entorno de demostración:
+
+1.  **Solo Tickets Digitales:** El sistema procesa exclusivamente los **PDFs** que genera la app de Mercadona (Factura electrónica). **No funciona con fotos** de tickets físicos arrugados.
+2.  **Supermercado:** Optimizado únicamente para el formato de **Mercadona**.
+3.  **Privacidad:** Las cuentas creadas y los datos subidos se **eliminan automáticamente cada 48 horas**. Puedes usar un correo inventado al registrarte.
+
+---
+
+## 📸 Galería del Proyecto
+
+_(El diseño sigue una filosofía minimalista inspirada en interfaces como Linear o Stripe)_
+
+|                        Dashboard Principal                        |                       Detalle de Análisis                       |
+| :---------------------------------------------------------------: | :-------------------------------------------------------------: |
+| ![Dashboard Screenshot](./docs/screenshots/dashboard_preview.png) | ![Analysis Screenshot](./docs/screenshots/analysis_preview.png) |
+|               _Visualización de métricas de gasto_                |                    _Desglose por categorías_                    |
+
+---
+
+## 🛠️ Ingeniería, Enfoque y Uso de IA
+
+> **Nota del Autor:** Este proyecto tiene un fuerte componente experimental y de aprendizaje.
+
+El objetivo principal no ha sido demostrar dominio exhaustivo de la sintaxis de un lenguaje concreto, sino **explorar y comprender el diseño de sistemas backend complejos de forma integral**, desde la arquitectura y la infraestructura hasta la base de datos y los flujos de datos.
+
+### Decisiones Técnicas
+
+Las decisiones estructurales —arquitectura de microservicios, elección de PostgreSQL, esquema de base de datos, uso de Docker y orquestación— han sido tomadas conscientemente por mí y constituyen el núcleo del valor de este proyecto.
+
+### Desarrollo "AI-Augmented"
+
+Se ha utilizado IA como herramienta activa de apoyo al desarrollo, especialmente en el servicio backend con **Rust**.
+
+- **El Experimento:** Evaluar hasta qué punto agentes de IA pueden agilizar el desarrollo en un lenguaje de bajo nivel (Rust) sin perder el control sobre la arquitectura.
+- **La Realidad:** Aunque parte del código ha sido generado con asistencia, **la lógica de negocio, la comunicación entre servicios, la seguridad (JWT) y el modelado de datos han sido definidos, revisados y orquestados por mí.**
+
+**Mercastats demuestra:**
+
+1.  Capacidad para diseñar y entender una arquitectura backend completa.
+2.  Conocimiento práctico de infraestructura, contenedores y despliegue.
+3.  Criterio técnico en la elección de tecnologías y trade-offs.
+4.  Uso consciente de IA como herramienta de productividad, no como sustituto del razonamiento técnico.
+
+---
+
+## 🏗️ Arquitectura del Sistema
+
+El sistema no es un monolito, sino un conjunto de servicios containerizados que se comunican entre sí.
+
+```mermaid
+graph TD
+    Client[Cliente Web (WASM)] -->|HTTPS| Proxy[Nginx Reverse Proxy]
+    Proxy -->|/api| Backend[Rust Backend API]
+    Proxy -->|/*| Frontend[Servidor Estático]
+
+    subgraph "Docker Compose Network"
+        Backend -->|SQL| DB[(PostgreSQL)]
+        Backend -->|HTTP| OCR[Servicio Python OCR]
+        OCR -->|Procesamiento| PyLibs[Tesseract / Pandas]
+    end
+```
+
+### Componentes Principales
+
+- **Frontend (Rust + Leptos):**
+  - Single Page Application (SPA) compilada a WebAssembly.
+  - Gestión de estado reactiva y alto rendimiento en el cliente.
+
+- **Backend Core (Rust):**
+  - API RESTful de alto rendimiento.
+  - Gestión de autenticación (JWT), subida de archivos y orquestación.
+  - Manejo de errores robusto y tipado seguro.
+
+- **Servicio de Inteligencia (Python):**
+  - Microservicio especializado en procesamiento de datos.
+  - Extracción de texto (OCR) y normalización de productos (Pandas).
+  - **Decisión de diseño:** Usar Python donde brilla (datos) y Rust donde importa el rendimiento (servidor).
+
+- **Base de Datos (PostgreSQL):**
+  - Modelado relacional estricto con funciones PL/pgSQL para lógica de negocio compleja.
+
+## 📁 Estructura del Proyecto
+
+Una visión rápida de cómo está organizado el código:
+
+```
+.
+├── backend/                  # API Principal (Rust)
+│   ├── src/models/           # Definiciones de structs y datos
+│   ├── src/routes/           # Endpoints de la API
+│   └── dockerfile            # Definición del contenedor
+├── frontend/                 # Cliente Web (Leptos/WASM)
+│   ├── src/pages/            # Vistas (Login, Upload, Dashboard)
+│   ├── src/components/       # UI Kit reutilizable
+│   └── ...
+├── intelligence-service/     # Microservicio de Datos (Python)
+│   ├── src/processor.py      # Lógica de extracción y limpieza
+│   └── ...
+├── sql/                      # Esquemas y Scripts de DB
+└── docker-compose.yml        # Orquestación de todo el sistema
+```
+
+## 🐳 Despliegue e Infraestructura
+
+El proyecto utiliza **Docker** para orquestar los 4 servicios fundamentales que componen la aplicación, garantizando consistencia entre desarrollo y producción.
+
+El sistema se levanta mediante `docker-compose`, orquestando los siguientes contenedores:
+
+1.  **Base de Datos (`db`):** Imagen oficial de PostgreSQL 16 (Alpine). Persistencia mediante volúmenes Docker.
+2.  **Servicio de Inteligencia (`intelligence-service`):** Microservicio en Python encargado del procesamiento pesado (OCR, ML). Se comunica con la base de datos y es consumido por el backend.
+3.  **Backend (`backend`):** El núcleo de la aplicación en Rust. Orquesta las peticiones, gestiona la autenticación y conecta con la base de datos y el servicio de inteligencia.
+4.  **Frontend (`frontend`):** Servidor web (Nginx) que sirve la aplicación WebAssembly (SPA). Actúa como punto de entrada para el usuario.
+
+```yaml
+# Fragmento simplificado del stack (docker-compose.yml)
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mercastats_db
+    # ...
+
+  intelligence-service:
+    build:
+      context: ./intelligence-service
+      dockerfile: Dockerfile
+    container_name: mercastats_intelligence
+    depends_on:
+      - db
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/dockerfile
+    ports: ["8000:8000"]
+    depends_on:
+      - db
+      - intelligence-service
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    ports: ["3000:80"]
+    depends_on:
+      - backend
+```
+
+## Contacto
+
+Creado por [Juan Carlos Negrín](https://github.com/Darkrai500)
