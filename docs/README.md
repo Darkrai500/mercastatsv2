@@ -35,7 +35,7 @@ Para mantener la simplicidad y privacidad en este entorno de demostración:
 
 |                    Dashboard Principal                     |                  Detalle de Análisis                  |
 | :--------------------------------------------------------: | :---------------------------------------------------: |
-| ![Dashboard Screenshot](./docs/screenshots/Dashboard.png) | ![Analysis Screenshot](./docs/screenshots/Stats.png) |
+| ![Dashboard Screenshot](./screenshots/Dashboard.png) | ![Analysis Screenshot](./screenshots/Stats.png) |
 |      _Visualización de Dashboard de carga de tickets_      |              _Vista de las estadísticas_              |
 
 ---
