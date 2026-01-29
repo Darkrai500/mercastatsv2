@@ -72,7 +72,7 @@ El sistema no es un monolito, sino un conjunto de servicios containerizados que 
 
 ```mermaid
 graph TD
-    Client[Cliente Web (WASM)] -->|HTTPS| Proxy[Nginx Reverse Proxy]
+    Client[Cliente Web WASM] -->|HTTPS| Proxy[Nginx Reverse Proxy]
     Proxy -->|/api| Backend[Rust Backend API]
     Proxy -->|/*| Frontend[Servidor Estático]
 
