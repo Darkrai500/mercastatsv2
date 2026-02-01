@@ -15,7 +15,7 @@
 
 Puedes probar la aplicación desplegada ahora mismo. No es necesario usar tu correo real.
 
-🔗 **URL:** [http://54.37.231.34/](http://54.37.231.34/)
+🔗 **URL:** [mercastats.app](https://mercastats.app/)
 
 | Rol              | Email           | Contraseña |
 | :--------------- | :-------------- | :--------- |
