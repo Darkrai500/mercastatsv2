@@ -19,7 +19,6 @@ from PIL import Image, ImageOps
 from loguru import logger
 
 from ..constants import (
-    MAX_RAW_TEXT_PREVIEW,
     PATTERN_DIRECCION,
     PATTERN_FECHA,
     PATTERN_FECHA_HORA,
@@ -222,12 +221,12 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> TextExtractionResult:
         return TextExtractionResult(text=full_text, processing_profile="pdf-text", warnings=[])
 
     except pdfplumber.pdfminer.pdfparser.PDFSyntaxError as exc:
-        logger.error(f"PDF corrupto o invalido: {exc}")
+        logger.error("PDF corrupto o invalido | tipo=%s", type(exc).__name__)
         raise PDFParsingError(f"PDF corrupto: {exc}") from exc
     except TicketNotDetectedError:
         raise
     except Exception as exc:
-        logger.error(f"Error inesperado al extraer texto del PDF: {exc}")
+        logger.error("Error inesperado al extraer texto | tipo=%s", type(exc).__name__)
         raise PDFParsingError(f"Error al procesar PDF: {exc}") from exc
 
 
@@ -349,7 +348,7 @@ def extract_numero_factura(text: str) -> Optional[str]:
     match = PATTERN_NUMERO_FACTURA.search(text)
     if match:
         numero = match.group(1)
-        logger.info(f"Numero de factura detectado: {numero}")
+        logger.info("Numero de factura detectado")
         return numero
 
     logger.warning("Numero de factura no detectado")
@@ -363,15 +362,15 @@ def extract_fecha_y_hora(text: str) -> Tuple[Optional[str], Optional[datetime]]:
         combinado = f"{fecha_str} {hora_str}"
         try:
             fecha_dt = datetime.strptime(combinado, "%d/%m/%Y %H:%M")
-            logger.info(f"Fecha y hora detectadas: {fecha_dt.isoformat(timespec='minutes')}")
+            logger.info("Fecha y hora detectadas")
             return fecha_str, fecha_dt
         except ValueError as exc:
-            logger.error(f"Error al parsear fecha y hora '{combinado}': {exc}")
+            logger.error("Fecha y hora no parseables | tipo=%s", type(exc).__name__)
 
     match = PATTERN_FECHA.search(text)
     if match:
         fecha_str = match.group(1)
-        logger.info(f"Fecha detectada (sin hora): {fecha_str}")
+        logger.info("Fecha detectada sin hora")
         return fecha_str, None
 
     logger.warning("Fecha no detectada")
@@ -384,10 +383,10 @@ def extract_total(text: str) -> Optional[float]:
         total_str = match.group(1)
         try:
             total_float = round(parse_decimal(total_str), 2)
-            logger.info(f"Total detectado: {total_float:.2f} euros")
+            logger.info("Total detectado")
             return total_float
         except ValueError as exc:
-            logger.error(f"Error al convertir total '{total_str}': {exc}")
+            logger.error("Total no parseable | tipo=%s", type(exc).__name__)
             return None
 
     logger.warning("Total no detectado")
@@ -411,9 +410,9 @@ def extract_store_details(text: str) -> Tuple[Optional[str], Optional[str]]:
         ubicacion = f"C/ {street}, {city}"
 
     if store_name:
-        logger.info(f"Tienda detectada: {store_name}")
+        logger.info("Tienda detectada")
     if ubicacion:
-        logger.info(f"Ubicacion detectada: {ubicacion}")
+        logger.info("Ubicacion detectada")
 
     return store_name, ubicacion
 
@@ -428,7 +427,7 @@ def extract_metodo_pago(text: str) -> Optional[str]:
             metodo = "Tarjeta bancaria"
         else:
             metodo = raw.title()
-        logger.info(f"Metodo de pago detectado: {metodo}")
+        logger.info("Metodo de pago detectado")
         return metodo
     return None
 
@@ -437,13 +436,13 @@ def extract_numero_operacion(text: str) -> Optional[str]:
     match = PATTERN_NUMERO_OPERACION.search(text)
     if match:
         numero = match.group(1)
-        logger.info(f"Numero de operacion detectado: {numero}")
+        logger.info("Numero de operacion detectado")
         return numero
 
     fallback = re.search(r"N\.C:\s*(\d+)", text, re.IGNORECASE)
     if fallback:
         numero = fallback.group(1)
-        logger.info(f"Numero de operacion detectado (N.C): {numero}")
+        logger.info("Numero de operacion detectado con formato alternativo")
         return numero
 
     return None
@@ -556,7 +555,7 @@ def extract_products(text: str) -> List[ParsedProduct]:
             index += 2
             continue
 
-        logger.debug(f"No se pudo interpretar la linea de producto: '{line}'")
+        logger.debug("Linea de producto no interpretable")
         index += 1
 
     logger.info(f"Productos detectados: {len(productos)}")
@@ -646,8 +645,6 @@ def parse_ticket(file_b64: str, mime_type: Optional[str] = None) -> ParsedTicket
             )
 
         ensure_text_threshold(text_result.text)
-        preview = text_result.text[:MAX_RAW_TEXT_PREVIEW].replace("\n", " ")
-        logger.debug(f"Preview del texto: {preview}...")
 
         numero_factura = extract_numero_factura(text_result.text)
         fecha, fecha_hora = extract_fecha_y_hora(text_result.text)
@@ -660,11 +657,7 @@ def parse_ticket(file_b64: str, mime_type: Optional[str] = None) -> ParsedTicket
         assign_iva_to_products(productos, iva_desglose)
 
         logger.info(
-            "Parsing completado: factura=%s fecha=%s fecha_hora=%s total=%s productos=%s profile=%s",
-            numero_factura,
-            fecha,
-            fecha_hora.isoformat(timespec="minutes") if fecha_hora else None,
-            total,
+            "Parsing completado | productos=%s | profile=%s",
             len(productos),
             text_result.processing_profile,
         )
@@ -686,14 +679,14 @@ def parse_ticket(file_b64: str, mime_type: Optional[str] = None) -> ParsedTicket
         )
 
     except base64.binascii.Error as exc:
-        logger.error(f"Error al decodificar base64: {exc}")
-        raise PDFParsingError(f"Base64 invalido: {exc}") from exc
+        logger.error("Base64 invalido | tipo=%s", type(exc).__name__)
+        raise PDFParsingError("Base64 invalido") from exc
     except UnsupportedFormatError:
         raise
     except TicketNotDetectedError:
         raise
     except Exception as exc:
-        logger.error(f"Error inesperado durante el parsing: {exc}")
+        logger.error("Error inesperado durante el parsing | tipo=%s", type(exc).__name__)
         raise
 
 

@@ -96,30 +96,28 @@ class ProcessTicketResponse(BaseModel):
             "example": {
                 "ticket_id": "550e8400-e29b-41d4-a716-446655440000",
                 "raw_text": "MERCADONA, S.A...",
-                "numero_factura": "2831-021-575287",
-                "fecha": "10/08/2023",
-                "fecha_hora": "2023-08-10T19:46:00",
-                "total": 52.11,
+                "numero_factura": "0000-000-000000",
+                "fecha": "01/01/2025",
+                "fecha_hora": "2025-01-01T12:00:00",
+                "total": 12.34,
                 "tienda": "MERCADONA, S.A.",
-                "ubicacion": "C/ PORTUGAL 37, 28943 FUENLABRADA",
+                "ubicacion": "C/ EJEMPLO 1, 00000 CIUDAD",
                 "metodo_pago": "Tarjeta bancaria",
-                "numero_operacion": "367328",
+                "numero_operacion": "000000",
                 "productos": [
                     {
-                        "nombre": "12 HUEVOS GRANDES-L",
+                        "nombre": "PRODUCTO DE PRUEBA",
                         "cantidad": 1,
                         "unidad": "unidad",
-                        "precio_unitario": 2.2,
-                        "precio_total": 2.2,
+                        "precio_unitario": 1.23,
+                        "precio_total": 1.23,
                         "descuento": 0.0,
                         "iva_porcentaje": 10.0,
-                        "iva_importe": 0.2
+                        "iva_importe": 0.11
                     }
                 ],
                 "iva_desglose": [
-                    {"porcentaje": 10.0, "base_imponible": 22.7, "cuota": 2.27},
-                    {"porcentaje": 21.0, "base_imponible": 11.94, "cuota": 2.51},
-                    {"porcentaje": 0.0, "base_imponible": 12.69, "cuota": 0.0}
+                    {"porcentaje": 10.0, "base_imponible": 11.22, "cuota": 1.12}
                 ]
             }
         },

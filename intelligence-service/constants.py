@@ -12,14 +12,14 @@ import re
 # ============================================================================
 
 # Número de factura: formato XXXX-XXX-XXXXXX
-# Ejemplo: "FACTURA SIMPLIFICADA: 2831-021-575287"
+# Ejemplo sintético: "FACTURA SIMPLIFICADA: 0000-000-000000"
 PATTERN_NUMERO_FACTURA = re.compile(
     r"FACTURA\s+SIMPLIFICADA:\s*(\d{4}-\d{3}-\d{6})",
     re.IGNORECASE
 )
 
 # Fecha: formato DD/MM/YYYY
-# Ejemplo: "10/08/2023 19:46"
+# Ejemplo sintético: "01/01/2025 12:00"
 # Incluye versin con hora en minutos
 PATTERN_FECHA_HORA = re.compile(
     r"\b(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2})\b"
@@ -31,7 +31,7 @@ PATTERN_FECHA = re.compile(
 )
 
 # Total del ticket: formato "TOTAL (€) XX,XX"
-# Ejemplo: "TOTAL (€) 52,11"
+# Ejemplo sintético: "TOTAL (€) 12,34"
 # Nota: Mercadona usa coma (,) como separador decimal
 PATTERN_TOTAL = re.compile(
     r"TOTAL\s*\((?:€|)\)\s*([0-9]+,[0-9]{2})",
@@ -81,7 +81,7 @@ PATTERN_IVA = re.compile(
 )
 
 # Dirección de la tienda
-# Ejemplo: "C/ PORTUGAL 37\n28943 FUENLABRADA"
+# Ejemplo sintético: "C/ EJEMPLO 1\n00000 CIUDAD"
 PATTERN_DIRECCION = re.compile(
     r"C/\s+(.+?)\n(\d{5}\s+\w+)",
     re.IGNORECASE
@@ -96,9 +96,6 @@ PATTERN_CIF = re.compile(
 # ============================================================================
 # CONFIGURACIÓN
 # ============================================================================
-
-# Número máximo de caracteres de raw_text para logging
-MAX_RAW_TEXT_PREVIEW = 500
 
 # Timeout para procesamiento de un PDF (segundos)
 PROCESSING_TIMEOUT = 30
