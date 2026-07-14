@@ -122,10 +122,10 @@ Procesa un ticket PDF y extrae información.
 ```json
 {
   "ticket_id": "550e8400-e29b-41d4-a716-446655440000",
-  "raw_text": "MERCADONA, S.A. A-46103834\nC/ PORTUGAL 37...",
-  "numero_factura": "2831-021-575287",
-  "fecha": "10/08/2023",
-  "total": 52.11
+  "raw_text": "TICKET DE PRUEBA...",
+  "numero_factura": "TEST-000-000000",
+  "fecha": "01/01/2025",
+  "total": 12.34
 }
 ```
 
@@ -142,7 +142,7 @@ Procesa un ticket PDF y extrae información.
 
 ```powershell
 # 1. Convertir PDF a base64 (PowerShell)
-$pdfPath = "C:\Users\jcneg\Documents\mercastatsv2\docs\20230810 Mercadona 52,11 €.pdf"
+$pdfPath = "/ruta/a/ticket-sintetico.pdf"
 $bytes = [System.IO.File]::ReadAllBytes($pdfPath)
 $base64 = [System.Convert]::ToBase64String($bytes)
 
@@ -164,7 +164,7 @@ import base64
 import requests
 
 # Leer PDF y convertir a base64
-with open("docs/20230810 Mercadona 52,11 €.pdf", "rb") as f:
+with open("/ruta/a/ticket-sintetico.pdf", "rb") as f:
     file_content_b64 = base64.b64encode(f.read()).decode("utf-8")
 
 # Enviar request
@@ -205,9 +205,9 @@ El servicio usa **Loguru** para logging detallado:
 2025-10-25 14:32:10 | INFO     | PDF decoded. Size: 37045 bytes
 2025-10-25 14:32:10 | INFO     | PDF opened successfully. Pages: 1
 2025-10-25 14:32:10 | INFO     | Page 1: 1523 characters extracted
-2025-10-25 14:32:10 | INFO     | ✓ Invoice number detected: 2831-021-575287
-2025-10-25 14:32:10 | INFO     | ✓ Date detected: 10/08/2023
-2025-10-25 14:32:10 | INFO     | ✓ Total detected: 52.11 €
+2025-10-25 14:32:10 | INFO     | ✓ Invoice number detected: TEST-000-000000
+2025-10-25 14:32:10 | INFO     | ✓ Date detected: 01/01/2025
+2025-10-25 14:32:10 | INFO     | ✓ Total detected: 12.34 €
 2025-10-25 14:32:10 | SUCCESS  | ✅ Ticket processed successfully
 ```
 

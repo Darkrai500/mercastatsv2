@@ -229,7 +229,7 @@ pub fn TicketHistory() -> impl IntoView {
                             </svg>
                         </button>
                     </div>
-                    
+
                     <div class="text-center mt-2 text-xs text-gray-400">
                         {move || format!("Página {} de {}", current_page.get(), total)}
                     </div>
