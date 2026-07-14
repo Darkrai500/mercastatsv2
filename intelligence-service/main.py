@@ -8,12 +8,14 @@ Endpoints:
     - POST /predict/next: Predice la próxima compra
 """
 
+import os
+import secrets
 import sys
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -109,12 +111,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:8080",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 
@@ -122,12 +133,28 @@ app.add_middleware(
 # ENDPOINTS
 # ============================================================================
 
-@app.get("/", include_in_schema=False)
+async def require_internal_api_key(
+    x_api_key: Optional[str] = Header(default=None),
+) -> None:
+    """Exige la clave compartida cuando está configurada en el entorno."""
+    expected = os.getenv("INTELLIGENCE_API_KEY", "").strip()
+    if expected and (
+        x_api_key is None or not secrets.compare_digest(x_api_key, expected)
+    ):
+        raise HTTPException(status_code=401, detail="Credencial interna inválida")
+
+
+@app.get("/", include_in_schema=False, dependencies=[Depends(require_internal_api_key)])
 async def root():
     return {"message": "Intelligence Service running. Check /health for status."}
 
 
-@app.get("/health", response_model=HealthResponse, tags=["Health"])
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["Health"],
+    dependencies=[Depends(require_internal_api_key)],
+)
 async def health_check():
     logger.info("Health check requested")
     return HealthResponse(status="ok", service="intelligence-service", version="2.0.0")
@@ -136,13 +163,16 @@ async def health_check():
 # --- OCR ENDPOINTS ---
 
 
-from processor import PDFParsingError, ImageParsingError, process_ticket_response
+from processor import ImageParsingError
 
-# ... (imports)
-
-@app.post("/ocr/process", response_model=ProcessTicketResponse, tags=["OCR"])
+@app.post(
+    "/ocr/process",
+    response_model=ProcessTicketResponse,
+    tags=["OCR"],
+    dependencies=[Depends(require_internal_api_key)],
+)
 async def process_ticket(request: ProcessTicketRequest):
-    logger.info("Procesando ticket %s | archivo=%s | mime=%s", request.ticket_id, request.file_name, request.mime_type)
+    logger.info("Procesando ticket | mime=%s", request.mime_type)
 
     try:
         response = process_ticket_response(
@@ -152,40 +182,37 @@ async def process_ticket(request: ProcessTicketRequest):
             mime_type=request.mime_type,
         )
 
-        fecha_repr = (
-            response.fecha_hora.isoformat(timespec="minutes")
-            if response.fecha_hora
-            else response.fecha
-        )
-
         logger.success(
-            "Ticket procesado | factura=%s | fecha=%s | total=%s | productos=%s",
-            response.numero_factura,
-            fecha_repr,
-            response.total,
+            "Ticket procesado | productos=%s | avisos=%s",
             len(response.productos),
+            len(response.warnings),
         )
 
         return response
 
     except (PDFParsingError, ImageParsingError) as exc:
-        logger.error("Error de parsing: %s", exc)
+        logger.warning("El ticket no superó la validación del parser")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"No se pudo procesar el archivo: {exc}",
+            detail="No se pudo procesar el archivo",
         ) from exc
     except Exception as exc:
-        logger.exception("Error inesperado: %s", exc)
+        logger.exception("Error inesperado al procesar un ticket")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {exc}",
+            detail="Error interno del servidor",
         ) from exc
 
 
 # --- ML ENDPOINTS ---
 
 
-@app.post("/predict/next", response_model=dict, tags=["ML"])
+@app.post(
+    "/predict/next",
+    response_model=dict,
+    tags=["ML"],
+    dependencies=[Depends(require_internal_api_key)],
+)
 async def predict_next(request: PredictRequest):
     global predictor
     if predictor is None:
@@ -206,12 +233,7 @@ async def predict_next(request: PredictRequest):
 
     # 2. Predicción
     current_features = vars(request.features_now)
-    logger.info(
-        "Prediccion solicitada | user_id=%s | current_date=%s | history=%s",
-        request.user_id,
-        request.current_date,
-        len(request.history_features),
-    )
+    logger.info("Prediccion solicitada | history=%s", len(request.history_features))
     model_input = {
         "day_of_week": current_features["day_of_week"],
         "hour_of_day": current_features["hour_of_day"],
@@ -222,12 +244,7 @@ async def predict_next(request: PredictRequest):
     }
 
     result = predictor.predict_next_visit(model_input)
-    logger.info(
-        "Resultado modelo | days_until=%.2f | hour=%s | spend=%.2f",
-        result.get("days_until", -1.0),
-        result.get("predicted_hour", -1),
-        result.get("predicted_spend", -1.0),
-    )
+    logger.info("Prediccion completada")
 
     # 3. Formatear respuesta
     current_dt = datetime.fromisoformat(request.current_date)
@@ -289,8 +306,8 @@ async def predict_next(request: PredictRequest):
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception("Excepcion no capturada: %s", exc)
+async def global_exception_handler(_request: Request, exc: Exception):
+    logger.error("Excepcion no capturada | tipo=%s", type(exc).__name__)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Error interno del servidor"},

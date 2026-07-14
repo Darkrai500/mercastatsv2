@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            nombre,\n            marca,\n            unidad,\n            precio_actual,\n            precio_actualizado_en,\n            created_at\n        FROM productos\n        WHERE nombre = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nombre",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "marca",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "unidad",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "precio_actual",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "precio_actualizado_en",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "ae3c2a5447821e8dfd2717fbbcc0d18530902c009fdd6a6d055b956c7c3013d0"
+}

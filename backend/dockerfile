@@ -12,6 +12,7 @@ WORKDIR /app
 
 # 1. Copiamos los archivos de configuración del Workspace (Raíz)
 COPY Cargo.toml Cargo.lock* ./
+COPY .sqlx ./.sqlx
 
 # 2. "TRUCO" PARA EL WORKSPACE:
 # Creamos la carpeta del frontend y un archivo src/lib.rs vacío.

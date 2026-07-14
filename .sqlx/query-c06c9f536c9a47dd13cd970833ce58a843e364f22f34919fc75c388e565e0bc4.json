@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            c.numero_factura,\n            c.fecha_hora,\n            c.total,\n            c.tienda,\n            c.ubicacion,\n            c.created_at,\n            COUNT(cp.producto_nombre) as \"num_productos?\"\n        FROM compras c\n        LEFT JOIN compras_productos cp ON c.numero_factura = cp.compra_numero_factura\n        WHERE c.usuario_email = $1\n        GROUP BY c.numero_factura, c.fecha_hora, c.total, c.tienda, c.ubicacion, c.created_at\n        ORDER BY c.fecha_hora DESC, c.created_at DESC\n        LIMIT $2 OFFSET $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "numero_factura",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "fecha_hora",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "total",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "tienda",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "ubicacion",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "num_productos?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "c06c9f536c9a47dd13cd970833ce58a843e364f22f34919fc75c388e565e0bc4"
+}

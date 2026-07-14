@@ -80,11 +80,7 @@ pub async fn process_ticket(
         }
     }
 
-    tracing::info!(
-        "Procesando ticket '{}' para el usuario {}",
-        payload.file_name,
-        authenticated_email
-    );
+    tracing::info!("Procesando ticket autenticado");
 
     // Clonar datos necesarios antes de consumir el payload
     let file_content_b64 = payload.file_content_b64.clone();
@@ -102,7 +98,7 @@ pub async fn process_ticket(
 
     // 2. Ingestar ticket si el usuario lo solicito
     let ingestion_result = if let Some(email) = usuario_email {
-        tracing::info!("Ingesta solicitada para el usuario {}", email);
+        tracing::info!("Ingesta de ticket solicitada");
 
         match ingest_ticket(
             &state.db_pool,
@@ -114,10 +110,7 @@ pub async fn process_ticket(
         .await
         {
             Ok(ingestion) => {
-                tracing::info!(
-                    "Ticket {} ingestado correctamente",
-                    ingestion.numero_factura
-                );
+                tracing::info!("Ticket ingestado correctamente");
                 Some(ingestion)
             }
             Err(err) => {
@@ -154,57 +147,15 @@ pub async fn process_ticket(
 
 /// Logging estructurado del resultado del OCR para facilitar depuracion.
 fn log_ocr_result(result: &OcrProcessTicketResponse) {
-    tracing::info!("OCR completado para ticket {}", result.ticket_id);
-
-    if let Some(ref factura) = result.numero_factura {
-        tracing::info!("  Numero de factura: {}", factura);
-    }
-
-    if let Some(ref fecha) = result.fecha {
-        tracing::info!("  Fecha: {}", fecha);
-    }
-
-    if let Some(total) = result.total {
-        tracing::info!("  Total detectado: {:.2}", total);
-    }
-
-    tracing::info!("  Productos detectados: {}", result.productos.len());
-
-    if let Some(profile) = &result.processing_profile {
-        tracing::info!("  Pipeline OCR: {}", profile);
-    }
-
-    if !result.productos.is_empty() {
-        for (idx, prod) in result.productos.iter().enumerate() {
-            tracing::info!(
-                "    {}. {} - {} {} x {:.2} = {:.2}",
-                idx + 1,
-                prod.nombre,
-                prod.cantidad,
-                prod.unidad,
-                prod.precio_unitario,
-                prod.precio_total
-            );
-        }
-    }
-
-    if !result.iva_desglose.is_empty() {
-        tracing::info!("  IVA desglosado:");
-        for iva in &result.iva_desglose {
-            tracing::info!(
-                "    {}% -> base {:.2}, cuota {:.2}",
-                iva.porcentaje,
-                iva.base_imponible,
-                iva.cuota
-            );
-        }
-    }
-
-    if !result.warnings.is_empty() {
-        for warning in &result.warnings {
-            tracing::warn!("  Advertencia OCR: {}", warning);
-        }
-    }
+    tracing::info!(
+        productos_detectados = result.productos.len(),
+        avisos = result.warnings.len(),
+        pipeline = result
+            .processing_profile
+            .as_deref()
+            .unwrap_or("desconocido"),
+        "OCR completado"
+    );
 }
 
 fn map_intelligence_error(err: IntelligenceClientError) -> AppError {
@@ -212,26 +163,25 @@ fn map_intelligence_error(err: IntelligenceClientError) -> AppError {
         IntelligenceClientError::Timeout | IntelligenceClientError::ServiceUnavailable => {
             AppError::ServiceUnavailable("Servicio de inteligencia no disponible".to_string())
         }
-        IntelligenceClientError::UnexpectedStatus { status, body } => {
+        IntelligenceClientError::UnexpectedStatus { status, .. } => {
             if status == ReqStatusCode::BAD_REQUEST
                 || status == ReqStatusCode::UNPROCESSABLE_ENTITY
                 || status == ReqStatusCode::UNSUPPORTED_MEDIA_TYPE
             {
-                AppError::BadRequest(body)
+                AppError::BadRequest("No se pudo procesar el ticket".to_string())
             } else {
                 AppError::InternalError(format!(
-                    "Fallo en el servicio de inteligencia ({}): {}",
-                    status, body
+                    "Fallo en el servicio de inteligencia ({})",
+                    status
                 ))
             }
         }
-        IntelligenceClientError::Deserialize(message) => {
-            AppError::InternalError(format!("Respuesta OCR invalida: {}", message))
+        IntelligenceClientError::Deserialize(_) => {
+            AppError::InternalError("Respuesta OCR invalida".to_string())
         }
-        IntelligenceClientError::Request(err) => AppError::InternalError(format!(
-            "No se pudo contactar con el servicio de inteligencia: {}",
-            err
-        )),
+        IntelligenceClientError::Request(_) => AppError::InternalError(
+            "No se pudo contactar con el servicio de inteligencia".to_string(),
+        ),
     }
 }
 

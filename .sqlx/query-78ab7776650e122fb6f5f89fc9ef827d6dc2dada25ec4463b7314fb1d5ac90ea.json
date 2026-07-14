@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO productos (nombre, marca, unidad, precio_actual, precio_actualizado_en)\n        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)\n        ON CONFLICT (nombre)\n        DO UPDATE SET\n            marca = COALESCE(productos.marca, EXCLUDED.marca),\n            unidad = COALESCE(productos.unidad, EXCLUDED.unidad),\n            precio_actual = CASE\n                WHEN productos.precio_actualizado_en IS NULL\n                     OR productos.precio_actualizado_en < CURRENT_TIMESTAMP\n                THEN EXCLUDED.precio_actual\n                ELSE productos.precio_actual\n            END,\n            precio_actualizado_en = CASE\n                WHEN productos.precio_actualizado_en IS NULL\n                     OR productos.precio_actualizado_en < CURRENT_TIMESTAMP\n                THEN EXCLUDED.precio_actualizado_en\n                ELSE productos.precio_actualizado_en\n            END\n        RETURNING\n            nombre,\n            marca,\n            unidad,\n            precio_actual,\n            precio_actualizado_en,\n            created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nombre",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "marca",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "unidad",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "precio_actual",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "precio_actualizado_en",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Numeric"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "78ab7776650e122fb6f5f89fc9ef827d6dc2dada25ec4463b7314fb1d5ac90ea"
+}

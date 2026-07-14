@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            DATE(c.fecha_hora)::text as \"fecha!\",\n            SUM(c.total)::numeric as \"total!\"\n        FROM compras c\n        WHERE c.usuario_email = $1\n            AND c.fecha_hora >= NOW() - INTERVAL '1 day' * $2::int\n        GROUP BY DATE(c.fecha_hora)\n        ORDER BY DATE(c.fecha_hora) ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fecha!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "total!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "cc2ab8a951259817b64afb20729e35634384939e0f84ffde5cf28f88ec022e32"
+}

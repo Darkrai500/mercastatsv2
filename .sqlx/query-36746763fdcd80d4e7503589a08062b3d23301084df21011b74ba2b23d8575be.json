@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO productos (nombre, unidad) VALUES ($1, 'unidad')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "36746763fdcd80d4e7503589a08062b3d23301084df21011b74ba2b23d8575be"
+}

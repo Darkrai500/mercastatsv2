@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            p.nombre,\n            SUM(cp.cantidad)::bigint as \"cantidad_total?\",\n            SUM(cp.precio_total)::numeric as \"gasto_total?\",\n            ROUND(AVG(cp.precio_unitario)::numeric, 2)::numeric as \"precio_medio?\",\n            p.precio_actual as \"precio_actual?\"\n        FROM compras c\n        INNER JOIN compras_productos cp ON c.numero_factura = cp.compra_numero_factura\n        INNER JOIN productos p ON cp.producto_nombre = p.nombre\n        WHERE c.usuario_email = $1\n        GROUP BY p.nombre, p.precio_actual\n        ORDER BY SUM(cp.precio_total) DESC\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nombre",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "cantidad_total?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "gasto_total?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "precio_medio?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "precio_actual?",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "c79e7a788ad24281e112da0926d8ec4ac7839138217ce037f6c23a6979981b37"
+}

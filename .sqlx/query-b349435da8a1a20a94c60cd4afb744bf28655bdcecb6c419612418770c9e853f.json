@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                numero_factura,\n                to_char(fecha_hora, 'YYYY-MM-DD\"T\"HH24:MI:SS') as \"fecha_hora?\",\n                total::float8 as \"total?\",\n                COALESCE(day_of_week::int4, 0) as \"day_of_week!\",\n                COALESCE(day_of_month::int4, 1) as \"day_of_month!\",\n                COALESCE(hour_of_day::int4, 12) as \"hour_of_day!\",\n                COALESCE(days_since_last_shop::float8, 0.0) as \"days_since_last_shop!\",\n                COALESCE(total_last_30d::float8, 0.0) as \"total_last_30d!\",\n                COALESCE(tickets_last_30d, 0) as \"tickets_last_30d!\",\n                COALESCE(is_payday_week, false) as \"is_payday_week!\"\n            FROM ml_ticket_features\n            WHERE usuario_email = $1\n            ORDER BY fecha_hora DESC\n            LIMIT 50\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "numero_factura",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "fecha_hora?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "total?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "day_of_week!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "day_of_month!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "hour_of_day!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "days_since_last_shop!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_last_30d!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 8,
+        "name": "tickets_last_30d!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_payday_week!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b349435da8a1a20a94c60cd4afb744bf28655bdcecb6c419612418770c9e853f"
+}

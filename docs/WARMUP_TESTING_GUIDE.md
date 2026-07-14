@@ -17,7 +17,8 @@ Before testing, ensure you have:
 2. **Database Created**:
    ```bash
    psql -U postgres -c "CREATE DATABASE mercastats;"
-   psql -U postgres mercastats -f sql/schema/schema.sql
+   psql -U postgres mercastats -f backend/migrations/0001_initial_schema.sql
+   psql -U postgres mercastats -f backend/migrations/0002_ml_views.sql
    ```
 
 3. **Python Dependencies Installed**:

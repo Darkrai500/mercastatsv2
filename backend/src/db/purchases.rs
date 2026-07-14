@@ -126,7 +126,7 @@ mod tests {
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_insert_purchase(pool: PgPool) -> sqlx::Result<()> {
         // Primero crear un usuario de prueba
         sqlx::query!(

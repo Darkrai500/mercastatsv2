@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            numero_factura,\n            ticket_pdf,\n            ticket_nombre_archivo,\n            ticket_tamano_bytes,\n            created_at\n        FROM tickets_pdf\n        WHERE numero_factura = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "numero_factura",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "ticket_pdf",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "ticket_nombre_archivo",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "ticket_tamano_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ed51af9bd145292bb48af2360a1968093740b14a84b37b4b4e2e2d1f8c5d42d4"
+}

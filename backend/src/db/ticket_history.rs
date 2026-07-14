@@ -104,7 +104,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_get_user_ticket_history(pool: PgPool) -> sqlx::Result<()> {
         // Setup: crear usuario
         sqlx::query!(
@@ -148,7 +148,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_get_user_stats(pool: PgPool) -> sqlx::Result<()> {
         // Setup
         sqlx::query!(

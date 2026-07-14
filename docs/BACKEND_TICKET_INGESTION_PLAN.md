@@ -10,11 +10,11 @@ Ingest the structured data produced by the embedded Python OCR worker into the M
 - The Python worker (`ocr-service/src/processor.py`) returns a JSON document with purchase metadata plus product lines. Rust deserialises it into `ProcessTicketResponse`.
 - `routes::ocr::process_ticket` only logs the structured response and returns it to the caller; the database remains unchanged.
 - The PostgreSQL schema already contains the required domain tables:
-  - `compras` (sql/schema/schema.sql:153)
-  - `tickets_pdf` (sql/schema/schema.sql:201)
-  - `productos` (sql/schema/schema.sql:80)
-  - `compras_productos` (sql/schema/schema.sql:237)
-  - `historico_precios` maintained via trigger `trigger_registrar_precio_historico` (sql/schema/schema.sql:503)
+  - `compras` (`backend/migrations/0001_initial_schema.sql`:153)
+  - `tickets_pdf` (`backend/migrations/0001_initial_schema.sql`:201)
+  - `productos` (`backend/migrations/0001_initial_schema.sql`:80)
+  - `compras_productos` (`backend/migrations/0001_initial_schema.sql`:237)
+  - `historico_precios` mantenido mediante `trigger_registrar_precio_historico` (`backend/migrations/0001_initial_schema.sql`:503)
 
 ## 3. Data Contract With the OCR Worker
 
@@ -155,4 +155,3 @@ When the backend work is complete, the frontend should:
 4. Optionally show a preview of parsed products so the user can confirm accuracy.
 
 This document should be kept in sync with implementation details as the integration progresses.
-

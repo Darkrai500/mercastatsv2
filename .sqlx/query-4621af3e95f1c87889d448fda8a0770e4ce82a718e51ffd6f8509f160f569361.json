@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO compras (numero_factura, usuario_email, fecha_hora, total)\n            VALUES ($1, $2, $3, $4)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Timestamp",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4621af3e95f1c87889d448fda8a0770e4ce82a718e51ffd6f8509f160f569361"
+}

@@ -341,9 +341,9 @@ pub async fn get_hourly_distribution(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
+    use chrono::{Datelike, Duration, Utc};
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_get_spending_trend(pool: PgPool) -> sqlx::Result<()> {
         // Setup
         sqlx::query!(
@@ -355,20 +355,20 @@ mod tests {
         .execute(&pool)
         .await?;
 
-        // Crear compras en días diferentes
-        for i in 1..=5 {
+        // Crear compras recientes en días diferentes para que el test no
+        // dependa de una fecha fija.
+        let today = Utc::now().date_naive();
+        for i in 0..5 {
+            let purchase_date = today - Duration::days(i);
             sqlx::query!(
                 r#"
                 INSERT INTO compras (numero_factura, usuario_email, fecha_hora, total)
                 VALUES ($1, $2, $3, $4)
                 "#,
-                format!("0001-trend-{:06}", i),
+                format!("0001-trend-{:06}", i + 1),
                 "trend@example.com",
-                NaiveDate::from_ymd_opt(2025, 1, i as u32)
-                    .unwrap()
-                    .and_hms_opt(10, 0, 0)
-                    .unwrap(),
-                Decimal::new(1000 * i, 2)
+                purchase_date.and_hms_opt(10, 0, 0).unwrap(),
+                Decimal::new(1000 * (i + 1), 2)
             )
             .execute(&pool)
             .await?;
@@ -383,7 +383,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_get_month_comparison(pool: PgPool) -> sqlx::Result<()> {
         // Setup
         sqlx::query!(
@@ -395,7 +395,13 @@ mod tests {
         .execute(&pool)
         .await?;
 
-        // Insert current month purchase
+        // Insertar una compra en el mes actual sin fijar el año del test.
+        let current_month = Utc::now()
+            .date_naive()
+            .with_day(1)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
         sqlx::query!(
             r#"
             INSERT INTO compras (numero_factura, usuario_email, fecha_hora, total)
@@ -403,10 +409,7 @@ mod tests {
             "#,
             "0001-month-current",
             "month@example.com",
-            NaiveDate::from_ymd_opt(2025, 1, 15)
-                .unwrap()
-                .and_hms_opt(10, 0, 0)
-                .unwrap(),
+            current_month,
             Decimal::new(10000, 2)
         )
         .execute(&pool)

@@ -10,7 +10,7 @@ Implementar un worker en Python responsable de procesar tickets en formato PDF s
 
 - Frontend (`frontend/src/pages/upload.rs`) ya permite seleccionar y subir archivos; usa `upload_ticket` (`frontend/src/api/tickets.rs`) contra `POST /api/tickets/upload`.
 - Backend (`backend/src/main.rs`) expone rutas de auth y health; no existe aún el módulo de tickets ni integración con workers.
-- Base de datos (`sql/schema/schema.sql`) incluye tablas clave:
+- Base de datos (`backend/migrations/0001_initial_schema.sql`) incluye tablas clave:
   - `compras` (metadatos del ticket, PK `numero_factura`).
   - `tickets_pdf` (contenido PDF binario, FK `numero_factura` → `compras`).
 
@@ -155,4 +155,3 @@ ocr-service/
 Notas:
 - `raw_text` puede ser grande; para logging, truncar a los primeros N caracteres.
 - Campos heurísticos son opcionales; no fallar si no se detectan.
-

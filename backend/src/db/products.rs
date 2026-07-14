@@ -83,7 +83,7 @@ mod tests {
     use super::*;
     use rust_decimal::Decimal;
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_upsert_new_product(pool: PgPool) -> sqlx::Result<()> {
         let product = ProductUpsert {
             nombre: "LECHE ENTERA".to_string(),
@@ -96,13 +96,13 @@ mod tests {
 
         assert_eq!(inserted.nombre, "LECHE ENTERA");
         assert_eq!(inserted.marca, Some("Hacendado".to_string()));
-        assert_eq!(inserted.unidad, "l");
+        assert_eq!(inserted.unidad.as_deref(), Some("l"));
         assert_eq!(inserted.precio_actual, Some(Decimal::new(95, 2)));
 
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_upsert_existing_product_preserves_marca(pool: PgPool) -> sqlx::Result<()> {
         // Insert inicial
         let product1 = ProductUpsert {

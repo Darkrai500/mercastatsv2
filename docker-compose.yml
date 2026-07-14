@@ -9,7 +9,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./sql/schema/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/migrations/0001_initial_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/migrations/0002_ml_views.sql:/docker-entrypoint-initdb.d/02-ml-views.sql:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -24,12 +25,16 @@ services:
       dockerfile: backend/dockerfile
     container_name: mercastats_backend
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - BACKEND_HOST=0.0.0.0
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
       - INTELLIGENCE_SERVICE_URL=http://intelligence-service:8001
+      - INTELLIGENCE_API_KEY=${INTELLIGENCE_API_KEY:-}
+      - INTELLIGENCE_TIMEOUT_SECS=${INTELLIGENCE_TIMEOUT_SECS:-30}
+      - INTELLIGENCE_MAX_RETRIES=${INTELLIGENCE_MAX_RETRIES:-2}
+      - DEMO_USER_EMAIL=${DEMO_USER_EMAIL:-}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -46,6 +51,8 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      - INTELLIGENCE_API_KEY=${INTELLIGENCE_API_KEY:-}
     ports:
       - "${INTELLIGENCE_PORT:-8001}:8001"
     depends_on:

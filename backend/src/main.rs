@@ -7,10 +7,14 @@ mod routes;
 mod schema;
 mod services;
 
-use axum::{routing::get, Router};
+use axum::{
+    http::{header, HeaderValue, Method},
+    routing::get,
+    Router,
+};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use config::AppConfig;
 use routes::auth::AppState;
@@ -69,6 +73,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         intelligence_client: intelligence_client.clone(),
     };
 
+    let allowed_origins = config
+        .cors_origins
+        .iter()
+        .map(|origin| origin.parse::<HeaderValue>())
+        .collect::<Result<Vec<_>, _>>()?;
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::list(allowed_origins))
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
+
     // Construir el router
     let app = Router::new()
         .route("/health", get(health))
@@ -80,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/predict",
             routes::intelligence::intelligence_router(state.clone()),
         )
-        .layer(CorsLayer::permissive());
+        .layer(cors);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
     tracing::info!("Servidor escuchando en http://{}", addr);

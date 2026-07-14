@@ -70,7 +70,7 @@ mod tests {
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn test_insert_and_get_ticket_pdf(pool: PgPool) -> sqlx::Result<()> {
         // Setup: crear usuario y compra
         sqlx::query!(

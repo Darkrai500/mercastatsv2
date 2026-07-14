@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO compras_productos (\n                compra_numero_factura,\n                producto_nombre,\n                cantidad,\n                precio_unitario,\n                precio_total,\n                descuento,\n                iva_porcentaje,\n                iva_importe\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e21a6187a9033faead530ba2241d7f0a4d384a458f78f7c58b83a4021d674ac"
+}

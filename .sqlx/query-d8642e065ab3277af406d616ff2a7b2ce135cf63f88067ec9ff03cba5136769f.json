@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO compras (\n            numero_factura,\n            usuario_email,\n            fecha_hora,\n            total,\n            tienda,\n            ubicacion,\n            metodo_pago,\n            numero_operacion\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n        RETURNING\n            numero_factura,\n            usuario_email,\n            fecha_hora,\n            total,\n            tienda,\n            ubicacion,\n            metodo_pago,\n            numero_operacion,\n            created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "numero_factura",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "usuario_email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "fecha_hora",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "total",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "tienda",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "ubicacion",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "metodo_pago",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "numero_operacion",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Timestamp",
+        "Numeric",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "d8642e065ab3277af406d616ff2a7b2ce135cf63f88067ec9ff03cba5136769f"
+}

@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub intelligence_timeout_secs: u64,
     pub intelligence_max_retries: u32,
     pub demo_user_email: Option<String>,
+    pub cors_origins: Vec<String>,
 }
 
 impl AppConfig {
@@ -47,6 +48,18 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(2);
 
+        let cors_origins = std::env::var("CORS_ORIGINS")
+            .unwrap_or_else(|_| "http://localhost:3000,http://localhost:8080".to_string())
+            .split(',')
+            .map(str::trim)
+            .filter(|origin| !origin.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        if cors_origins.is_empty() {
+            return Err("CORS_ORIGINS no contiene ningún origen válido".to_string());
+        }
+
         Ok(Self {
             database_url,
             jwt_secret,
@@ -59,6 +72,7 @@ impl AppConfig {
             demo_user_email: std::env::var("DEMO_USER_EMAIL")
                 .ok()
                 .filter(|v| !v.is_empty()),
+            cors_origins,
         })
     }
 
