@@ -5,12 +5,13 @@
 [![Python](https://img.shields.io/badge/intelligence-Python-blue?logo=python)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/data-PostgreSQL-336791?logo=postgresql)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/infra-Docker-2496ED?logo=docker)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Mercastats convierte tickets de compra en un historial consultable de gasto, productos y hábitos de consumo. Es un monorepo full-stack con una API en Rust, un cliente Leptos compilado a WebAssembly, PostgreSQL y un servicio Python para extracción de tickets y predicciones.
 
-## Demo
+## Demo pública
 
-La demo está disponible en [mercastats.app](https://mercastats.app/).
+El despliegue previsto para la demo está en [mercastats.app](https://mercastats.app/). En la comprobación del 14 de julio de 2026 el servidor no respondió antes de agotar un tiempo de espera de 15 segundos, por lo que su disponibilidad no está garantizada. Si no carga, el proyecto puede ejecutarse localmente con Docker siguiendo las instrucciones de abajo.
 
 | Usuario | Contraseña |
 | --- | --- |
@@ -119,3 +120,7 @@ docker-compose.yml     Orquestación local del stack principal
 ## Autor
 
 Creado por [Juan Carlos Negrín](https://github.com/Darkrai500).
+
+## Licencia
+
+Este proyecto se distribuye bajo la [licencia MIT](LICENSE).
