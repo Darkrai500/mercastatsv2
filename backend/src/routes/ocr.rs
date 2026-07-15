@@ -114,7 +114,7 @@ pub async fn process_ticket(
                 Some(ingestion)
             }
             Err(err) => {
-                tracing::error!("Fallo al ingerir ticket: {:?}", err);
+                tracing::error!("Fallo al ingerir ticket");
                 return Err(err);
             }
         }

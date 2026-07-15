@@ -44,10 +44,7 @@ pub async fn get_user_tickets(
         }
     }
 
-    tracing::info!(
-        "Obteniendo historico de tickets para usuario: {}",
-        params.usuario_email.as_deref().unwrap_or(&user_email)
-    );
+    tracing::info!("Obteniendo historico de tickets para usuario autenticado");
 
     let tickets =
         get_user_ticket_history(&state.db_pool, &user_email, params.limit, params.offset).await?;

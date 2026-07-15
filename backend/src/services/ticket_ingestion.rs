@@ -50,14 +50,11 @@ pub async fn ingest_ticket(
 
     let numero_factura = PurchaseInsert::normalize_invoice_number(numero_factura);
 
-    tracing::info!("🔄 Iniciando ingesta de ticket: {}", numero_factura);
+    tracing::info!("Iniciando ingesta de ticket");
 
     // 2. Verificar si ya existe (idempotencia)
     if let Some(_existing) = db::get_purchase(pool, &numero_factura).await? {
-        tracing::warn!(
-            "⚠️  La compra {} ya existe en la base de datos",
-            numero_factura
-        );
+        tracing::warn!("La compra ya existe en la base de datos");
         return Err(AppError::DuplicatePurchase(numero_factura));
     }
 
@@ -110,7 +107,7 @@ pub async fn ingest_ticket(
     // 9. Ejecutar inserción en transacción
     let mut tx = pool.begin().await?;
 
-    tracing::debug!("📦 Procesando {} productos...", productos.len());
+    tracing::debug!("Procesando {} productos", productos.len());
 
     // Upsert de productos en el catálogo
     for producto in &productos {
@@ -125,14 +122,11 @@ pub async fn ingest_ticket(
     }
 
     // Insertar compra
-    tracing::debug!("🛒 Insertando compra: {}", numero_factura);
+    tracing::debug!("Insertando compra");
     let _purchase = db::insert_purchase(&mut *tx, &purchase_data).await?;
 
     // Insertar productos de la compra
-    tracing::debug!(
-        "📋 Insertando {} productos de la compra...",
-        productos.len()
-    );
+    tracing::debug!("Insertando {} productos de la compra", productos.len());
 
     // Insertar productos uno por uno dentro de la transacción
     let mut rows_inserted = 0u64;
@@ -167,18 +161,14 @@ pub async fn ingest_ticket(
     }
 
     // Insertar PDF del ticket
-    tracing::debug!(
-        "📄 Guardando PDF ({} bytes)...",
-        ticket_pdf.ticket_pdf.len()
-    );
+    tracing::debug!("Guardando PDF ({} bytes)", ticket_pdf.ticket_pdf.len());
     db::insert_ticket_pdf(&mut *tx, &ticket_pdf).await?;
 
     // Commit de la transacción
     tx.commit().await?;
 
     tracing::info!(
-        "✅ Ticket {} ingestado exitosamente ({} productos)",
-        numero_factura,
+        "Ticket ingestado correctamente ({} productos)",
         rows_inserted
     );
 
@@ -217,10 +207,7 @@ fn parse_fecha_hora(response: &ProcessTicketResponse) -> AppResult<NaiveDateTime
     // Fallback a fecha sola con hora por defecto
     if let Some(ref fecha_str) = response.fecha {
         if let Ok(date) = chrono::NaiveDate::parse_from_str(fecha_str, "%Y-%m-%d") {
-            tracing::warn!(
-                "⚠️  Fecha sin hora detectada, usando 12:00:00 por defecto para ticket {}",
-                response.ticket_id
-            );
+            tracing::warn!("Fecha sin hora detectada; se usa 12:00:00 por defecto");
             let dt = date.and_hms_opt(12, 0, 0).unwrap();
             return Ok(to_utc_naive(dt));
         }
@@ -298,14 +285,7 @@ fn parse_producto(producto: &TicketProduct) -> AppResult<PurchaseProductInsert> 
 
     // Validar coherencia de precios
     if !product_insert.validate_price_coherence() {
-        tracing::warn!(
-            "⚠️  Incoherencia de precios en producto {}: {} × {:.2} - {:.2} ≠ {:.2}",
-            product_insert.producto_nombre,
-            product_insert.cantidad,
-            product_insert.precio_unitario,
-            product_insert.descuento,
-            product_insert.precio_total
-        );
+        tracing::warn!("Incoherencia de precios detectada en un producto del ticket");
     }
 
     Ok(product_insert)
@@ -326,10 +306,7 @@ fn validate_totals(productos: &[PurchaseProductInsert], expected_total: Decimal)
     }
 
     if diff > Decimal::ZERO {
-        tracing::warn!(
-            "⚠️  Pequeña diferencia en totales: {:.2} (dentro de tolerancia)",
-            diff
-        );
+        tracing::warn!("Pequeña diferencia en totales dentro de la tolerancia");
     }
 
     Ok(())
