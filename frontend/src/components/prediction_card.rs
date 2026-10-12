@@ -5,12 +5,18 @@ use leptos::*;
 #[component]
 pub fn PredictionCard(#[prop(into)] prediction: PredictionResult) -> impl IntoView {
     let has_products = !prediction.suggested_products.is_empty();
-    let formatted_date = prediction
-        .timestamp
-        .parse::<DateTime<FixedOffset>>()
-        .ok()
+    let parsed_timestamp = prediction.timestamp.parse::<DateTime<FixedOffset>>().ok();
+    let formatted_date = parsed_timestamp
         .map(|dt| dt.format("%d/%m/%Y").to_string())
         .unwrap_or_else(|| prediction.timestamp.clone());
+    let formatted_datetime = parsed_timestamp
+        .map(|dt| dt.format("%d/%m/%Y %H:%M").to_string())
+        .unwrap_or_else(|| prediction.timestamp.clone());
+    let spend_range = format!(
+        "{:.0}€ – {:.0}€",
+        prediction.estimated_total_min, prediction.estimated_total_max
+    );
+    let spend_central = format!("Lo más probable: {:.0}€", prediction.estimated_total);
 
     view! {
         <div class="w-full max-w-3xl mx-auto p-6 bg-white rounded-2xl shadow-sm border border-gray-100 animate-fade-in space-y-6">
@@ -26,6 +32,12 @@ pub fn PredictionCard(#[prop(into)] prediction: PredictionResult) -> impl IntoVi
             </header>
 
             <div class="space-y-6">
+                <div class="p-4 rounded-xl bg-primary-50 border border-primary-100">
+                    <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-1">"Gasto estimado"</h3>
+                    <p class="text-2xl font-bold text-primary-700">{spend_range}</p>
+                    <p class="text-xs text-gray-500 mt-1">{spend_central}</p>
+                </div>
+
                 <div>
                     <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">"Productos sugeridos (cesta base)"</h3>
                     {move || if has_products {
@@ -69,7 +81,7 @@ pub fn PredictionCard(#[prop(into)] prediction: PredictionResult) -> impl IntoVi
 
                 <div class="pt-4 border-t border-gray-100 flex items-center flex-wrap gap-3 justify-between text-xs text-gray-500">
                     <span class="font-medium">{format!("Confianza del modelo: {:.0}%", prediction.confidence * 100.0)}</span>
-                    <span>{format!("Actualizado: {}", prediction.timestamp)}</span>
+                    <span>{format!("Visita estimada: {}", formatted_datetime)}</span>
                 </div>
             </div>
         </div>

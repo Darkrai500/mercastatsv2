@@ -24,7 +24,7 @@ Usa únicamente datos sintéticos o no sensibles. El repositorio no promete borr
 - Registro e inicio de sesión con contraseñas protegidas mediante bcrypt y sesiones JWT.
 - Ingesta de tickets PDF e imagen, con normalización de productos y persistencia relacional.
 - Dashboard de gasto, historial de tickets y estadísticas agregadas.
-- Predicción experimental de próxima compra mediante un microservicio Python.
+- Predicción de la próxima compra (día y hora, gasto estimado y productos que toca reponer) mediante un modelo estadístico por usuario en el microservicio Python.
 - Contenedores independientes y comprobaciones de salud para los servicios.
 
 ## Arquitectura
@@ -40,6 +40,24 @@ flowchart LR
 ```
 
 La separación mantiene la autenticación, la orquestación y el acceso tipado a datos en Rust, mientras reserva Python para OCR y experimentación con modelos. El cliente consume la API desde WebAssembly y Nginx actúa como servidor estático y proxy.
+
+## Arranque rápido (macOS)
+
+```bash
+./run.sh
+```
+
+Un solo comando prepara lo que falte (`.env` con secretos aleatorios, entorno virtual de Python, objetivo `wasm32` de Rust y `trunk`), arranca el motor de Docker (OrbStack o Docker Desktop) si está apagado, levanta PostgreSQL y lanza el servicio Python, la API Rust y el frontend con recarga automática. Cuando el frontend termina de compilar abre <http://localhost:3000>. La primera vez tarda unos minutos; las siguientes, segundos.
+
+| Comando | Qué hace |
+| --- | --- |
+| `./run.sh` | Desarrollo con recarga (BD en Docker + 3 procesos nativos) |
+| `./run.sh docker` | Todo el stack en contenedores (`docker compose up --build`) |
+| `./run.sh test` | Tests de Python y del backend Rust |
+| `./run.sh setup` | Solo prepara el entorno |
+| `./run.sh stop` | Detiene la base de datos (los datos se conservan) |
+
+Si el puerto 5432 ya lo usa otro PostgreSQL (por ejemplo, uno instalado en el Mac), el script usa automáticamente otro puerto libre para la base de datos de Mercastats y lo guarda en `.env`.
 
 ## Puesta en marcha con Docker
 
@@ -94,8 +112,14 @@ Servicio de inteligencia:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r intelligence-service/requirements.txt pytest
-python -m pytest intelligence-service/test_predictor.py
+python -m pip install -r intelligence-service/requirements.txt pytest httpx
+python -m pytest intelligence-service
+```
+
+Para evaluar el predictor con usuarios sintéticos (precisión del día, error de hora y gasto, calidad de las sugerencias de productos):
+
+```bash
+cd intelligence-service && python backtest.py
 ```
 
 ## Estructura
@@ -113,7 +137,7 @@ docker-compose.yml     Orquestación local del stack principal
 ## Limitaciones conocidas
 
 - La extracción está especializada en formatos de Mercadona; no es un parser universal de recibos.
-- Las predicciones son experimentales y dependen de disponer de historial suficiente.
+- La predicción necesita al menos 5 días con compra para mostrarse y su confianza es deliberadamente conservadora con historiales cortos. No modela festivos ni cambios de hábito recientes.
 - La configuración local no debe reutilizar secretos ni credenciales de producción.
 - Antes de subir un ticket real, revisa su contenido: un recibo puede incluir datos de pago, localización y hábitos de compra.
 

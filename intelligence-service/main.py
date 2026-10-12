@@ -12,15 +12,16 @@ import os
 import secrets
 import sys
 from contextlib import asynccontextmanager
+from datetime import date, datetime, timedelta
 from typing import List, Optional
-from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
-from pydantic import BaseModel
-import pandas as pd
+from pydantic import BaseModel, Field
 
 # Importaciones de OCR
 from models import (
@@ -31,7 +32,7 @@ from models import (
 from processor import PDFParsingError, process_ticket_response
 
 # Importaciones de ML
-from predictor import ShoppingPredictor
+from predictor import Prediction, ProductLine, Ticket, predict_next_purchase
 
 # ============================================================================
 # CONFIGURACION DE LOGGING
@@ -49,53 +50,49 @@ logger.add(
 # MODELOS ML
 # ============================================================================
 
+MAX_HISTORY_TICKETS = 1000
+MAX_PRODUCT_LINES = 20000
+
 
 class TicketFeature(BaseModel):
-    numero_factura: Optional[str]
-    fecha_hora: Optional[str]  # ISO format
-    total: Optional[float]
-    day_of_week: int
-    day_of_month: int
-    hour_of_day: int
-    days_since_last_shop: float
-    total_last_30d: float
-    tickets_last_30d: int
-    is_payday_week: bool
-    target_days_until_next: Optional[float] = None
+    """
+    Un ticket del historial del usuario.
+
+    Solo ``fecha_hora`` y ``total`` alimentan el modelo: el resto de características
+    (día de la semana, hora, huecos entre visitas...) se derivan aquí a partir de la
+    fecha para que existan en un único sitio con una única convención. Las versiones
+    anteriores del backend enviaban también esos campos derivados; se aceptan y se
+    ignoran para no romper la compatibilidad.
+    """
+
+    fecha_hora: Optional[str] = None  # ISO 8601, hora local del ticket
+    total: Optional[float] = None
+
+
+class ProductPurchase(BaseModel):
+    """Una línea de producto de un ticket pasado."""
+
+    name: str
+    fecha_hora: str  # ISO 8601, hora local del ticket
+    quantity: float
+    unit_price: float
 
 
 class PredictRequest(BaseModel):
-    user_id: str
-    current_date: str
-    features_now: TicketFeature
-    history_features: List[TicketFeature]
-
-
-class PredictionResponse(BaseModel):
-    timestamp: str
-    time_window_label: str
-    time_window_range: str
-    day_label: str
-    estimated_total: float
-    estimated_total_min: float
-    estimated_total_max: float
-    confidence: float
-    suggested_products: List[dict]
+    user_id: Optional[str] = None  # no se usa: el servicio no guarda estado por usuario
+    current_date: datetime
+    history_features: List[TicketFeature] = Field(default_factory=list, max_length=MAX_HISTORY_TICKETS)
+    product_history: List[ProductPurchase] = Field(default_factory=list, max_length=MAX_PRODUCT_LINES)
 
 
 # ============================================================================
 # LIFECYCLE EVENTS
 # ============================================================================
 
-predictor = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global predictor
     logger.info("Iniciando Intelligence Service (OCR + ML)...")
-    predictor = ShoppingPredictor.load()
-    logger.info("Modelo cargado en arranque | is_trained=%s", predictor.is_trained)
     yield
     logger.info("Deteniendo Intelligence Service...")
 
@@ -207,102 +204,140 @@ async def process_ticket(request: ProcessTicketRequest):
 # --- ML ENDPOINTS ---
 
 
+WEEKDAY_NAMES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+def local_timezone() -> ZoneInfo:
+    """Zona horaria de las tiendas (los tickets guardan la hora local de pared)."""
+    name = os.getenv("APP_TIMEZONE", "Europe/Madrid")
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        logger.warning("APP_TIMEZONE no es una zona válida; se usa Europe/Madrid")
+        return ZoneInfo("Europe/Madrid")
+
+
+def to_local_naive(value: datetime, tz: ZoneInfo) -> datetime:
+    """Hora local de pared sin zona; los instantes con zona (p. ej. UTC) se convierten."""
+    if value.tzinfo is not None:
+        value = value.astimezone(tz).replace(tzinfo=None)
+    return value
+
+
+def _parse_local(value: Optional[str], tz: ZoneInfo) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return to_local_naive(datetime.fromisoformat(value), tz)
+    except ValueError:
+        return None
+
+
+def parse_tickets(rows: List[TicketFeature], tz: ZoneInfo) -> List[Ticket]:
+    tickets = []
+    for row in rows:
+        when = _parse_local(row.fecha_hora, tz)
+        if when is None or row.total is None or row.total < 0:
+            continue
+        tickets.append(Ticket(when=when, total=float(row.total)))
+    return tickets
+
+
+def parse_product_lines(rows: List[ProductPurchase], tz: ZoneInfo) -> List[ProductLine]:
+    lines = []
+    for row in rows:
+        when = _parse_local(row.fecha_hora, tz)
+        if when is None or row.quantity <= 0 or row.unit_price < 0 or not row.name:
+            continue
+        lines.append(ProductLine(row.name, when, float(row.quantity), float(row.unit_price)))
+    return lines
+
+
+def _clock(hour: float) -> str:
+    total_minutes = int(round(hour * 60))
+    return f"{total_minutes // 60:02d}:{total_minutes % 60:02d}"
+
+
+def describe_day(target: date, today: date) -> str:
+    weekday = WEEKDAY_NAMES[target.weekday()]
+    diff = (target - today).days
+    if diff <= 0:
+        return f"hoy ({weekday})"
+    if diff == 1:
+        return f"mañana ({weekday})"
+    same_week = target - timedelta(days=target.weekday()) == today - timedelta(days=today.weekday())
+    if diff < 7 and same_week:
+        return f"este {weekday}"
+    return f"el próximo {weekday}"
+
+
+def build_prediction_payload(prediction: Prediction, now: datetime, tz: ZoneInfo) -> dict:
+    """Da forma de contrato JSON (el que consume el backend Rust) a una predicción."""
+    day_label = describe_day(prediction.when.date(), now.date())
+    clock = prediction.when.hour + prediction.when.minute / 60.0
+    return {
+        "timestamp": prediction.when.replace(tzinfo=tz).isoformat(),
+        "time_window_label": f"{day_label}, alrededor de las {_clock(clock)}",
+        "time_window_range": f"{_clock(prediction.window_start)} - {_clock(prediction.window_end)}",
+        "day_label": day_label,
+        "estimated_total": prediction.total,
+        "estimated_total_min": prediction.total_min,
+        "estimated_total_max": prediction.total_max,
+        "confidence": prediction.confidence,
+        "suggested_products": [
+            {
+                "name": p.name,
+                "probability": p.probability,
+                "price_estimation": p.price_estimation,
+                "reason": p.reason,
+            }
+            for p in prediction.products
+        ],
+        "learning_mode": prediction.learning_mode,
+    }
+
+
+# Se declara síncrona a propósito: el cálculo es CPU puro y FastAPI la ejecuta en su
+# pool de hilos en lugar de bloquear el bucle de eventos.
 @app.post(
     "/predict/next",
     response_model=dict,
     tags=["ML"],
     dependencies=[Depends(require_internal_api_key)],
 )
-async def predict_next(request: PredictRequest):
-    global predictor
-    if predictor is None:
-        predictor = ShoppingPredictor.load()
-        logger.info("Predictor inicializado en /predict/next | is_trained=%s", predictor.is_trained)
+def predict_next(request: PredictRequest):
+    tz = local_timezone()
+    now = to_local_naive(request.current_date, tz)
 
-    # 1. Entrenamiento/incremental
-    if request.history_features:
-        df_history = pd.DataFrame([vars(f) for f in request.history_features])
-        logger.info("Entrenando con %s tickets historicos", len(df_history))
-        predictor.train(df_history)
-    else:
-        logger.warning("Sin historial para entrenar (se mantiene modelo previo)")
+    prediction = predict_next_purchase(
+        parse_tickets(request.history_features, tz),
+        parse_product_lines(request.product_history, tz),
+        now,
+    )
 
-    if not predictor.is_trained:
-        logger.error("Modelo no entrenado; abortando prediccion")
-        raise HTTPException(status_code=503, detail="Model not trained yet")
-
-    # 2. Predicción
-    current_features = vars(request.features_now)
-    logger.info("Prediccion solicitada | history=%s", len(request.history_features))
-    model_input = {
-        "day_of_week": current_features["day_of_week"],
-        "hour_of_day": current_features["hour_of_day"],
-        "days_since_last_shop": current_features["days_since_last_shop"],
-        "total_last_30d": current_features["total_last_30d"],
-        "tickets_last_30d": current_features["tickets_last_30d"],
-        "is_payday_week": current_features["is_payday_week"],
-    }
-
-    result = predictor.predict_next_visit(model_input)
-    logger.info("Prediccion completada")
-
-    # 3. Formatear respuesta
-    current_dt = datetime.fromisoformat(request.current_date)
-
-    days_until = result["days_until"]
-    if pd.isna(days_until):
-        logger.warning("Prediccion de dias es NaN, usando valor por defecto (7 dias)")
-        days_until = 7.0
-
-    predicted_date = current_dt + timedelta(days=days_until)
-    predicted_date = predicted_date.replace(hour=result["predicted_hour"], minute=0, second=0)
-
-    day_diff = (predicted_date.date() - current_dt.date()).days
-    weekday_names = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-    weekday = weekday_names[predicted_date.weekday()]
-    if day_diff == 0:
-        day_label = f"hoy ({weekday})"
-    elif day_diff == 1:
-        day_label = f"mañana ({weekday})"
-    elif day_diff < 7:
-        day_label = f"este {weekday}"
-    else:
-        day_label = f"el próximo {weekday}"
-
-    start_hour = result["predicted_hour"]
-    end_hour = min(start_hour + 2, 23)
-    time_window_range = f"{start_hour:02d}:00 - {end_hour:02d}:00"
-
-    base_total = max(result["predicted_spend"], 0.0)
-    estimated_min = round(base_total * 0.9, 2)
-    estimated_max = round(base_total * 1.1, 2)
-
-    learning_mode = False
-    if request.history_features and len(request.history_features) < 15:
-        learning_mode = True
-
-    # Sin placeholders: el backend inyectará productos reales
-    suggested_products: list[dict] = []
-
-    return {
-        "prediction": {
-            "timestamp": predicted_date.isoformat(),
-            "time_window_label": f"{day_label}, alrededor de las {start_hour:02d}:00",
-            "time_window_range": time_window_range,
-            "day_label": day_label,
-            "estimated_total": round(base_total, 2),
-            "estimated_total_min": estimated_min,
-            "estimated_total_max": estimated_max,
-            "confidence": 0.85,
-            "suggested_products": suggested_products,
-            "learning_mode": learning_mode,
-        }
-    }
+    # Sin identificadores, importes ni productos en los logs (ver docs/SECURITY_AUDIT.md).
+    logger.info(
+        "Predicción generada | visitas={} | aprendiendo={}",
+        prediction.visits_used,
+        prediction.learning_mode,
+    )
+    return {"prediction": build_prediction_payload(prediction, now, tz)}
 
 
 # ============================================================================
 # EXCEPTION HANDLERS
 # ============================================================================
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_request: Request, exc: RequestValidationError):
+    # Por defecto FastAPI repite en la respuesta el valor recibido (campo "input"), que aquí
+    # puede ser un dato de compra o un PDF entero, y acabaría en los logs de quien llama.
+    errors = [
+        {"loc": list(error.get("loc", ())), "msg": error.get("msg", ""), "type": error.get("type", "")}
+        for error in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 @app.exception_handler(Exception)

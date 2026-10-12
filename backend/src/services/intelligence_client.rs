@@ -148,26 +148,31 @@ impl IntelligenceClient {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+/// Ticket del historial que se envía al servicio de predicción.
+///
+/// Solo importan el instante (hora local de pared del ticket) y el total: el servicio
+/// deriva por sí mismo día de la semana, hora, huecos entre visitas, etc., de modo que
+/// esas características existen en un único sitio y con una única convención.
+#[derive(Serialize, Debug, Clone, sqlx::FromRow)]
 pub struct TicketFeature {
-    pub numero_factura: Option<String>,
-    pub fecha_hora: Option<String>,
-    pub total: Option<f64>,
-    pub day_of_week: i32,
-    pub day_of_month: i32,
-    pub hour_of_day: i32,
-    pub days_since_last_shop: f64,
-    pub total_last_30d: f64,
-    pub tickets_last_30d: i64,
-    pub is_payday_week: bool,
+    pub fecha_hora: String,
+    pub total: f64,
+}
+
+/// Línea de producto de un ticket pasado (para estimar la cadencia de recompra).
+#[derive(Serialize, Debug, Clone, sqlx::FromRow)]
+pub struct ProductPurchase {
+    pub name: String,
+    pub fecha_hora: String,
+    pub quantity: f64,
+    pub unit_price: f64,
 }
 
 #[derive(Serialize, Debug)]
 pub struct PredictRequest {
-    pub user_id: String,
     pub current_date: String,
-    pub features_now: TicketFeature,
     pub history_features: Vec<TicketFeature>,
+    pub product_history: Vec<ProductPurchase>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]

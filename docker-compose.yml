@@ -3,6 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: mercastats_db
     restart: always
+    # Los tickets guardan la hora local de pared (sin zona). Con el servidor en UTC, la
+    # restricción compras.fecha_valida rechazaba los tickets de las últimas 1-2 horas.
+    command: ["postgres", "-c", "timezone=Europe/Madrid"]
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -53,6 +56,7 @@ services:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
       - INTELLIGENCE_API_KEY=${INTELLIGENCE_API_KEY:-}
+      - APP_TIMEZONE=${APP_TIMEZONE:-Europe/Madrid}
     ports:
       - "${INTELLIGENCE_PORT:-8001}:8001"
     depends_on:

@@ -14,7 +14,8 @@ Este documento describe controles verificables en el código y trabajo pendiente
 - CORS restringido a la lista `CORS_ORIGINS` en Rust y FastAPI.
 - Clave compartida `INTELLIGENCE_API_KEY` comprobada por el servicio Python cuando está configurada.
 - Timeouts y reintentos acotados en las llamadas Rust → Python.
-- Logs de OCR y predicción sin email, factura, cesta, total ni identificador de usuario.
+- Logs de OCR y predicción sin email, factura, cesta, total ni identificador de usuario (el backend registra solo recuentos).
+- Las respuestas 422 del servicio de inteligencia no repiten los valores recibidos, para que no acaben en los logs de quien llama.
 
 ## Configuración obligatoria de producción
 

@@ -1,10 +1,8 @@
 fastapi
 uvicorn
-scikit-learn
-pandas
-joblib
 psycopg2-binary
 python-dotenv
+tzdata
 # OCR Dependencies
 pydantic-settings
 python-multipart

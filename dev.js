@@ -2,6 +2,7 @@
 "use strict";
 
 const cp = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const RESET = "\x1b[0m";
@@ -41,7 +42,18 @@ const runBackend = intelligenceOnly ? false : !frontendOnly;
 const runFrontend = intelligenceOnly ? false : !backendOnly;
 
 if (runIntelligence) {
-  const pythonCmd = process.platform === "win32" ? "python" : "python3";
+  // Prefiere el entorno virtual del proyecto (./run.sh lo crea): el Python global de
+  // Homebrew/macOS no permite instalar paquetes (PEP 668).
+  const venvPython = path.join(
+    projectRoot,
+    ".venv",
+    process.platform === "win32" ? "Scripts/python.exe" : "bin/python"
+  );
+  const pythonCmd = fs.existsSync(venvPython)
+    ? venvPython
+    : process.platform === "win32"
+      ? "python"
+      : "python3";
   commands.push({
     name: "intelligence",
     cmd: pythonCmd,
@@ -63,6 +75,9 @@ if (runBackend) {
     args: backendArgs,
     cwd: backendDir,
     color: colors.backend,
+    // Consultas SQLx verificadas con los metadatos versionados en .sqlx/ (como en Docker),
+    // sin necesitar la base de datos para compilar.
+    env: { SQLX_OFFLINE: process.env.SQLX_OFFLINE ?? "true" },
   });
 }
 
@@ -165,7 +180,7 @@ function launch(proc) {
 
   const child = cp.spawn(proc.cmd, proc.args, {
     cwd: proc.cwd,
-    env: process.env,
+    env: { ...process.env, ...proc.env },
     stdio: ["inherit", "pipe", "pipe"],
   });
 

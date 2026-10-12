@@ -1,5 +1,18 @@
 🔮 Plan de Implementación: Sistema de Predicción "Next Shop" (ML-Powered)
 
+> ## Estado actual (2026-10-11): este documento es el diseño original y ya no describe el código
+>
+> - **Modelos.** Los RandomForest/KNN se sustituyeron por un modelo estadístico sin estado (`intelligence-service/predictor.py`). Con ≤50 filas por usuario no generalizaban y la implementación fallaba: error 500 con menos de ~7 tickets, hora predicha dependiente del gasto del mes, fecha anclada en "ahora" (se desplazaba cada día) y un modelo global compartido entre usuarios. El modelo se ajusta en cada petición con el historial del propio usuario.
+> - **Cuándo.** Cada día candidato se puntúa con el patrón de intervalos entre visitas (condicionado al día de la semana de la última visita) × la frecuencia de cada día de la semana. El domingo se descarta salvo que el usuario compre en domingo. La hora es el pico de densidad de las horas históricas de ese día de la semana.
+> - **Cuánto.** Mediana ponderada por recencia, con ajuste por el hueco desde la visita anterior solo si hay relación real; el rango cubre ≈70 % de los casos.
+> - **Qué.** Modelo C implementado como cadencia de recompra por producto (mediana de días entre compras frente al tiempo transcurrido) mezclada con la frecuencia reciente. Antes el backend inventaba las probabilidades a partir de las cantidades históricas.
+> - **Features.** Las deriva solo el servicio Python a partir de `fecha_hora` y `total` (hora local de pared, `APP_TIMEZONE`, lunes=0). Antes existían tres convenciones distintas de día de la semana (SQL `DOW` domingo=0, Rust y Python lunes=0) y la hora actual se enviaba en UTC. Las vistas `ml_*` siguen en las migraciones, pero la aplicación ya no las usa.
+> - **Contrato.** `POST /predict/next` recibe `current_date`, `history_features` (`fecha_hora`, `total`) y `product_history` (`name`, `fecha_hora`, `quantity`, `unit_price`). Los campos antiguos se aceptan e ignoran. La respuesta no cambia.
+> - **Modo aprendizaje.** Se activa con menos de 5 días con compra (antes, menos de 15 tickets); entre 5 y ~15 se muestra la predicción con una confianza deliberadamente baja.
+> - **Validación.** `python backtest.py` simula usuarios sintéticos y mide acierto de día, error de hora y gasto, cobertura del rango y calidad de las sugerencias. No hay datos reales en el repositorio: los números absolutos dependen del realismo de los arquetipos.
+> - **Pendiente.** Festivos y cambios de hábito recientes no se modelan.
+
+
 Estado: Planificación Técnica  
 Tecnología: Rust (Orquestador) + Python (Motor ML Scikit-Learn) + PostgreSQL (Feature Store ligero)  
 Objetivo: Predecir con precisión **cuándo** irá el usuario a comprar, **cuánto** gastará y **qué productos** específicos necesitará, adaptándose al contexto temporal y reutilizando al máximo la potencia de PostgreSQL para precalcular características.
