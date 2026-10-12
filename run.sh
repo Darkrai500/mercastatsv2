@@ -350,7 +350,16 @@ ensure_rust() {
   fi
   if ! have trunk; then
     say "Instalando trunk (solo la primera vez)"
-    if have brew; then brew install trunk; else cargo install --locked trunk; fi
+    case "$PKG" in
+      brew|pacman) install_packages trunk ;;
+      *)
+        # Algunas versiones de GCC no aceptan los atributos SIMD de libdeflate-sys,
+        # una dependencia de Trunk. Clang permite compilarla en esas distribuciones.
+        have clang || install_packages clang
+        CC=clang cargo install --locked trunk
+        ;;
+    esac
+    have trunk || die "Trunk no quedó disponible después de instalarlo."
   fi
   local sum stamp=.cargo-fetch.sha
   sum="$(sha_file Cargo.lock)"
