@@ -136,6 +136,20 @@ Cada correo se procesa una sola vez, y un ticket que ya está en la base de dato
 - **Desconectar** revoca el acceso en Google y borra el token; los tickets ya importados se conservan.
 - **Problemas frecuentes:** `redirect_uri_mismatch` → la URI de Google Cloud no coincide con `GOOGLE_REDIRECT_URI`; «Acceso bloqueado: la app no ha completado la verificación» → falta tu correo como usuario de prueba; «Gmail denegó el acceso» → la Gmail API no está habilitada en el proyecto.
 
+## Fotos de tickets en papel
+
+En «Subir tickets» también se puede subir la foto de un ticket en papel (JPG, PNG, WEBP o HEIC). La lee un modelo de visión a través de [OpenRouter](https://openrouter.ai/) y, antes de guardarla, se revisa junto a la imagen en un formulario editable (factura, fecha, hora, total y productos) que avisa si la suma de los productos no cuadra con el total. Los PDF siguen exactamente el mismo camino de siempre y no salen del servidor.
+
+| Variable | Para qué sirve |
+| --- | --- |
+| `OPENROUTER_API_KEY` | Clave de OpenRouter. Sin ella las fotos se leen con Tesseract en local, bastante menos fiable. |
+| `OCR_VISION_MODELS` | Modelos a probar en orden si uno falla (por defecto `anthropic/claude-haiku-5.5,google/gemini-3.1-flash-lite`). |
+| `OCR_VISION_TIMEOUT` | Segundos máximos para leer una foto entre todos los modelos (25 por defecto; menos que `INTELLIGENCE_TIMEOUT_SECS`). |
+
+- **Coste:** unos 0,001 $ por foto con Claude Haiku 5.5. Conviene ponerle a la clave un límite de crédito en OpenRouter.
+- **Privacidad:** la foto se envía a OpenRouter y al proveedor del modelo.
+- Por qué este enfoque y cómo se evaluó: [`docs/IMAGE_TICKET_OCR_PLAN.md`](docs/IMAGE_TICKET_OCR_PLAN.md).
+
 ## Desarrollo y comprobaciones
 
 Backend Rust, con PostgreSQL levantado y el esquema aplicado:

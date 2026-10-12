@@ -11,3 +11,7 @@ loguru
 pytesseract
 Pillow
 pillow-heif >=0.18.0
+# Fotos de tickets: preprocesado (Tesseract) y modelo de visión (OpenRouter)
+opencv-python-headless
+numpy
+httpx

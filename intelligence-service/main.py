@@ -4,7 +4,7 @@ Combina funcionalidades de OCR (procesamiento de tickets) y Predicción (ML).
 
 Endpoints:
     - GET /health: Health check
-    - POST /ocr/process: Procesa un ticket PDF y devuelve datos estructurados
+    - POST /ocr/process: Procesa un ticket (PDF o foto) y devuelve datos estructurados
     - POST /predict/next: Predice la próxima compra
 """
 
@@ -29,7 +29,15 @@ from models import (
     ProcessTicketRequest,
     ProcessTicketResponse,
 )
-from processor import PDFParsingError, process_ticket_response
+from processor import (
+    ImageParsingError,
+    PDFParsingError,
+    TicketReaderUnavailableError,
+    TicketRejectedError,
+    process_ticket_response,
+)
+
+from services.vision_parser import vision_enabled, vision_models
 
 # Importaciones de ML
 from predictor import Prediction, ProductLine, Ticket, predict_next_purchase
@@ -93,6 +101,10 @@ class PredictRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando Intelligence Service (OCR + ML)...")
+    if vision_enabled():
+        logger.info("Fotos de tickets: modelo de visión ({})", ", ".join(vision_models()))
+    else:
+        logger.warning("Fotos de tickets: sin OPENROUTER_API_KEY, se leerán con Tesseract (poco fiable)")
     yield
     logger.info("Deteniendo Intelligence Service...")
 
@@ -160,16 +172,16 @@ async def health_check():
 # --- OCR ENDPOINTS ---
 
 
-from processor import ImageParsingError
-
+# Síncrona a propósito: leer una foto llama a un modelo externo (varios segundos) o a
+# Tesseract; FastAPI la ejecuta en su pool de hilos sin bloquear el resto de peticiones.
 @app.post(
     "/ocr/process",
     response_model=ProcessTicketResponse,
     tags=["OCR"],
     dependencies=[Depends(require_internal_api_key)],
 )
-async def process_ticket(request: ProcessTicketRequest):
-    logger.info("Procesando ticket | mime=%s", request.mime_type)
+def process_ticket(request: ProcessTicketRequest):
+    logger.info("Procesando ticket | mime={}", request.mime_type)
 
     try:
         response = process_ticket_response(
@@ -180,18 +192,33 @@ async def process_ticket(request: ProcessTicketRequest):
         )
 
         logger.success(
-            "Ticket procesado | productos=%s | avisos=%s",
+            "Ticket procesado | perfil={} | productos={} | avisos={}",
+            response.processing_profile,
             len(response.productos),
             len(response.warnings),
         )
 
         return response
 
+    except TicketRejectedError as exc:
+        # Solo fotos. El mensaje está redactado para el usuario (no contiene datos del
+        # ticket) y `code` le indica al backend que puede mostrarlo tal cual.
+        logger.warning("Foto rechazada por el lector")
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": str(exc), "code": "ticket_rejected"},
+        )
     except (PDFParsingError, ImageParsingError) as exc:
         logger.warning("El ticket no superó la validación del parser")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No se pudo procesar el archivo",
+        ) from exc
+    except TicketReaderUnavailableError as exc:
+        logger.error("Sin lector de fotos: falta OPENROUTER_API_KEY y Tesseract")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El lector de fotos no está disponible",
         ) from exc
     except Exception as exc:
         logger.exception("Error inesperado al procesar un ticket")
