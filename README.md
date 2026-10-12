@@ -58,6 +58,8 @@ En Windows, desde PowerShell:
 
 El lanzador prepara lo que falte: `.env` con secretos aleatorios, Node.js, Rust y su objetivo WebAssembly, Trunk, Python 3.11, las dependencias de los servicios Python (inteligencia y prototipo OCR), Tesseract con español y Docker. Usa Homebrew en macOS, el gestor de paquetes de la distribución en Linux y winget en Windows. Algunas instalaciones del sistema pueden pedir privilegios de administrador; en Linux, el usuario debe tener acceso al socket de Docker. Después levanta PostgreSQL y lanza el servicio Python, la API Rust y el frontend con recarga automática. En macOS y Linux abre <http://localhost:3000> cuando responde el frontend; en Windows visita esa URL. La primera compilación puede tardar varios minutos.
 
+En CachyOS/Arch agrupa los paquetes que falten en una sola instalación con `pacman` (incluidos `uv`, Trunk y `rust-wasm` si se usa el Rust del sistema). No ejecuta una actualización completa del sistema; si los mirrors devuelven errores 404, actualiza con `sudo pacman -Syu` y vuelve a lanzar el script.
+
 | Comando | Qué hace |
 | --- | --- |
 | `./run.sh` | Desarrollo con recarga (BD en Docker + 3 procesos nativos) |

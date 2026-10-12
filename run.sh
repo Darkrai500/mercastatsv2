@@ -58,7 +58,7 @@ install_packages() {
   say "Instalando paquetes del sistema: $*"
   case "$PKG" in
     brew) have brew || die "Instala Homebrew desde https://brew.sh y vuelve a ejecutar ./run.sh"; brew install "$@" ;;
-    pacman) as_root pacman -S --needed --noconfirm "$@" ;;
+    pacman) as_root pacman -S --needed --noconfirm "$@" || die "Falló pacman. Si hay errores 404 o paquetes desincronizados, ejecuta sudo pacman -Syu y reintenta." ;;
     apt) as_root apt-get update; as_root apt-get install -y "$@" ;;
     dnf) as_root dnf install -y "$@" ;;
     zypper) as_root zypper --non-interactive install "$@" ;;
@@ -77,7 +77,23 @@ ensure_system_tools() {
       for tool in openssl curl node pkg-config cc lsof; do
         have "$tool" || case "$tool" in node) packages+=(nodejs);; cc) packages+=(base-devel);; pkg-config) packages+=(pkgconf);; *) packages+=("$tool");; esac
       done
-      have tesseract || packages+=(tesseract tesseract-data-spa)
+      have uv || packages+=(uv)
+      have python3.11 || packages+=(python311)
+      have trunk || packages+=(trunk)
+      have docker || packages+=(docker docker-compose)
+      if have docker && ! docker compose version >/dev/null 2>&1; then packages+=(docker-compose); fi
+      have tesseract || packages+=(tesseract)
+      if ! have tesseract || ! tesseract --list-langs 2>/dev/null | grep -qx spa; then
+        packages+=(tesseract-data-spa)
+      fi
+      if have pkg-config && ! pkg-config --exists openssl; then packages+=(openssl); fi
+      if [[ "$(command -v cargo 2>/dev/null || true)" == /usr/bin/cargo ]] &&
+         [[ "$(command -v rustc 2>/dev/null || true)" == /usr/bin/rustc ]] &&
+         pacman -Q rust >/dev/null 2>&1 && ! pacman -Q rust-wasm >/dev/null 2>&1; then
+        packages+=(rust-wasm)
+      elif ! pacman -Q rust >/dev/null 2>&1 && ! have rustup; then
+        packages+=(rustup)
+      fi
       ;;
     apt)
       for tool in openssl curl node pkg-config cc lsof; do
@@ -93,9 +109,8 @@ ensure_system_tools() {
       ;;
   esac
   install_packages "${packages[@]}"
-  if [[ "$OS" == linux ]] && ! pkg-config --exists openssl; then
+  if [[ "$OS" == linux && "$PKG" != pacman ]] && ! pkg-config --exists openssl; then
     case "$PKG" in
-      pacman) install_packages openssl ;;
       apt) install_packages libssl-dev ;;
       dnf) install_packages openssl-devel ;;
       zypper) install_packages libopenssl-devel ;;
@@ -104,7 +119,7 @@ ensure_system_tools() {
   if have tesseract && ! tesseract --list-langs 2>/dev/null | grep -qx spa; then
     case "$PKG" in
       brew) install_packages tesseract-lang ;;
-      pacman) install_packages tesseract-data-spa ;;
+      pacman) die "Falta el idioma spa de Tesseract tras instalar tesseract-data-spa." ;;
       apt) install_packages tesseract-ocr-spa ;;
       dnf) install_packages tesseract-langpack-spa ;;
       zypper) warn "Instala el paquete de idioma español de Tesseract para OCR." ;;
@@ -268,7 +283,9 @@ ensure_db() {
 }
 
 ensure_python() {
-  local path requirements extras stamp sum py
+  local path requirements extras stamp sum py preference
+  preference=managed
+  [[ "$PKG" == pacman ]] && preference=system
   for path in .venv ocr-service/.venv; do
     if [[ "$path" == .venv ]]; then
       requirements=intelligence-service/requirements.txt; extras=(pytest httpx)
@@ -279,12 +296,12 @@ ensure_python() {
     if [[ ! -x "$py" ]]; then
       say "Creando entorno virtual de Python ($path, Python 3.11)"
       if have uv; then
-        uv venv "$path" --python 3.11 --python-preference managed
+        uv venv "$path" --python 3.11 --python-preference "$preference"
       elif have python3.11; then
         python3.11 -m venv "$path"
       else
         ensure_uv
-        uv venv "$path" --python 3.11 --python-preference managed
+        uv venv "$path" --python 3.11 --python-preference "$preference"
       fi
     fi
     sum="$(sha_file "$requirements")"
@@ -322,6 +339,11 @@ PY
 }
 
 ensure_uv() {
+  if [[ "$PKG" == pacman ]]; then
+    install_packages uv
+    have uv || die "No se pudo instalar uv con pacman."
+    return
+  fi
   have curl || install_packages curl
   say "Instalando uv para disponer de Python 3.11"
   local script
@@ -334,19 +356,30 @@ ensure_uv() {
 }
 
 ensure_rust() {
-  if ! have rustup || ! have cargo; then
-    say "Instalando Rust y rustup"
-    local script
-    script="$(mktemp)"
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$script"
-    sh "$script" -y --no-modify-path
-    rm -f "$script"
-    export PATH="$HOME/.cargo/bin:$PATH"
-  fi
-  have cargo && have rustup || die "No se pudo instalar Rust."
-  if ! rustup target list --installed | grep -q '^wasm32-unknown-unknown$'; then
-    say "Añadiendo el objetivo wasm32-unknown-unknown"
-    rustup target add wasm32-unknown-unknown
+  if [[ "$PKG" == pacman ]] &&
+     [[ "$(command -v cargo 2>/dev/null || true)" == /usr/bin/cargo ]] &&
+     [[ "$(command -v rustc 2>/dev/null || true)" == /usr/bin/rustc ]] &&
+     pacman -Q rust >/dev/null 2>&1; then
+    if ! pacman -Q rust-wasm >/dev/null 2>&1; then install_packages rust-wasm; fi
+  else
+    if [[ "$PKG" == pacman ]] && ! have rustup && ! pacman -Q rust >/dev/null 2>&1; then
+      install_packages rustup
+    fi
+    if ! have rustup || ! have cargo; then
+      say "Instalando Rust y rustup"
+      local script
+      script="$(mktemp)"
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$script"
+      sh "$script" -y --no-modify-path
+      rm -f "$script"
+      export PATH="$HOME/.cargo/bin:$PATH"
+    fi
+    have cargo && have rustup || die "No se pudo instalar Rust."
+    if ! rustup show active-toolchain >/dev/null 2>&1; then rustup default stable; fi
+    if ! rustup target list --installed | grep -q '^wasm32-unknown-unknown$'; then
+      say "Añadiendo el objetivo wasm32-unknown-unknown"
+      rustup target add wasm32-unknown-unknown
+    fi
   fi
   if ! have trunk; then
     say "Instalando trunk (solo la primera vez)"
