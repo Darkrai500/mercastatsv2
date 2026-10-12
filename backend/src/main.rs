@@ -5,6 +5,8 @@ mod error;
 mod google_flow_tests;
 mod middleware;
 mod models;
+#[cfg(test)]
+mod ocr_flow_tests;
 mod routes;
 mod schema;
 mod services;

@@ -1,92 +1,61 @@
-# Plan de Implementacion: OCR de Tickets en Imagen
+# Fotos de tickets en papel
 
-Ultima actualizacion: 27/11/2025
+Última actualización: 12/10/2026 · Estado: implementado (rama `feat/ticket-foto-ocr`)
 
 ## 1. Objetivo
 
-Extender el pipeline de OCR para que procese tickets de Mercadona en formato imagen (JPG/PNG/WEBP/HEIC) con la misma calidad de extraccion que los PDFs. La solucion debe detectar tickets escaneados dentro de PDFs (sin texto embebido), aplicar preprocesado robusto, y devolver errores claros cuando no haya ticket interpretable.
+Además del PDF del ticket digital, poder subir la **foto de un ticket en papel** de Mercadona, con todo lo que implica una foto: perspectiva, pliegues, sombras, tinta térmica gastada, desenfoque, fotos de iPhone en HEIC y archivos de varios megas.
 
-## 2. Alcance
+Restricción de partida: **el camino de los PDF no cambia**. El parser de PDF ya funcionaba bien; las fotos van por un camino aparte y solo comparten la ingesta en base de datos.
 
-- IN: soporte de imagen en el worker Python; fallback OCR para PDFs escaneados; validaciones y mensajes de error; actualizacion de contrato entre backend y worker; ajustes menores en backend/frontend para nuevos campos y errores.
-- OUT: entrenamiento de modelos ML, deduplicacion avanzada de productos, almacenamiento de la imagen original en BD.
+## 2. Decisión: modelo de visión vía OpenRouter, Tesseract de respaldo
 
-## 3. Estado actual
+Se evaluaron los dos enfoques con una foto real de un ticket de 13 productos (no incluida en el repositorio) y tres versiones degradadas de la misma foto (girada con perspectiva, oscura con sombra, borrosa a baja resolución con JPEG comprimido).
 
-- Frontend (`frontend/src/pages/upload.rs`) ya acepta imagenes y PDFs y envia base64 a `POST /ocr/process`.
-- Backend (`backend/src/routes/ocr.rs`) valida `file_content_b64` (alias `pdf_b64`) y delega al servicio de inteligencia sin distinguir MIME.
-- Worker (`ocr-service/src/services/pdf_parser.py`) solo maneja PDFs de texto via `pdfplumber`; falla si el PDF es un scan o si se envia una imagen directa.
-- Errores: se retorna 422 cuando no hay texto en PDF, pero no hay clasificadores de causa ni manejo para imagenes.
+**Tesseract + OpenCV** (14 combinaciones de recorte, corrección de luz, binarización, escala y modo de página). La mejor configuración leyó 7 de 13 productos (menos de la mitad del importe), no leyó el TOTAL en letra grande y perdió dígitos en cuatro importes (`4,5`, `3,7€`, `1,0$`, `1,5`). Con cuatro incógnitas los cuadres del ticket no bastan para reconstruirlos. Además es inestable: la similitud con el texto real iba de 0,03 a 0,76 según el reescalado.
 
-## 4. Consideraciones clave
+**Modelos de visión** (36 llamadas por OpenRouter, 0,04 $ en total). "Perfecto" significa los 6 campos de cabecera, los 13 importes, las cantidades y los nombres (sin contar tildes) correctos:
 
-- Calidad variable: fotos inclinadas, sombras, pliegues, desenfoque, fondos oscuros.
-- Formatos: JPG/PNG nativos, WEBP de moviles, HEIC/HEIF de iOS; PDFs que contienen solo una imagen.
-- Rendimiento: limitar resolucion max al preprocesar para evitar timeouts en Tesseract.
-- Seguridad: rechazar archivos que no sean imagen/PDF al validar el buffer, no solo la extension.
+| Modelo | Perfectos | Coste por foto | Latencia media |
+|---|---|---|---|
+| `anthropic/claude-haiku-5.5` | 6/6 | 0,0011 $ | 7,6 s |
+| `google/gemini-3.1-flash-lite` | 5/6 | 0,0024 $ | 4,0 s |
+| `qwen/qwen3.7-flash` | 3/6 | 0,0004 $ | 33 s |
+| `google/gemini-2.5-flash-lite` | 3/6 (1 JSON inválido) | 0,0011 $ | 7,1 s |
+| `openai/gpt-6-luna` | 2/6 | 0,0008 $ | 9,3 s |
+| `openai/gpt-5-nano` | 0/6 | 0,0010 $ | 17 s |
 
-## 5. Plan tecnico
+Por defecto se usa Claude Haiku 5.5 con Gemini 3.1 Flash Lite de respaldo (`OCR_VISION_MODELS`). A ~1 $ cada 1.000 fotos el coste es despreciable para un uso doméstico. Sin `OPENROUTER_API_KEY` (o si ningún modelo responde) se usa Tesseract, con un aviso de que la lectura es poco fiable.
 
-### 5.1 Worker Python (ocr-service)
+Fallos típicos observados, que el código cubre:
+- en fotos borrosas los modelos pierden tildes (`SALMON`): al guardar, los nombres sin tildes se emparejan con el catálogo;
+- algunos modelos meten la cantidad en el nombre (`1 PAN`): se quita solo si coincide con la cantidad comprada, porque hay productos como `12 HUEVOS GRANDES-L`;
+- algún modelo devuelve el objeto dentro de una lista o un JSON roto: se desenvuelve o se pasa al siguiente modelo.
 
-1) Nuevas dependencias: `pytesseract`, `Pillow` (+ `pillow-heif` para HEIC/HEIF), `opencv-python-headless` para preprocesado (deskew/denoise), `pdf2image` opcional si necesitamos rasterizar paginas sin `page.to_image()`. Documentar requisito del binario Tesseract en README/dev.js.
-2) Deteccion de tipo: inspeccionar cabecera del buffer (magic bytes) para decidir `source_type = pdf|image`. En PDF, si `extract_text_from_pdf` retorna poco texto, rasterizar cada pagina y pasar por el pipeline de imagen.
-3) Pipeline de imagen:
-   - Cargar con Pillow/pillow-heif, normalizar orientacion EXIF, convertir a RGB -> escala de grises.
-   - Preprocesado: resize max 2000px lado largo, filtro de mediana, threshold adaptativo, inversion opcional; deskew basico con OpenCV (Hough/angle).
-   - Ejecutar `pytesseract` con `lang=spa` y modo OEM/PSM adecuado (ej. PSM 6 o 4); retry con variantes (crudo, binarizado).
-   - Post-procesar texto (normalizar espacios, upper), reutilizar regex existentes.
-4) Reutilizar parser: pasar el texto OCR al mismo extractor de campos (`extract_numero_factura`, `extract_products`, etc.) para mantener heuristicas unificadas.
-5) Validaciones y errores:
-   - Si texto < umbral o no contiene minimos (`MERCADONA`, `FACTURA`, `TOTAL`), lanzar `TicketNotDetectedError`.
-   - Si OCR devuelve texto pero sin campos clave, devolver 422 con mensaje orientativo.
-   - Añadir enum/codigos: `UNSUPPORTED_FORMAT`, `EMPTY_TEXT`, `NO_TICKET_DETECTED`, `OCR_TIMEOUT`, `PARSER_ERROR`.
-6) Observabilidad: log de `source_type`, tiempo de OCR, longitud de texto, numero de productos, motivo de rechazo. Truncar texto en logs.
+## 3. Flujo
 
-### 5.2 Contrato API worker <-> backend
+```
+Foto ─► /api/ocr/process ─► servicio Python
+          (backend)            ├─ ¿foto por bytes mágicos? (JPEG/PNG/WEBP/HEIC)
+                               │    sí ─► EXIF, RGB, ≤2000 px, JPEG ─► OpenRouter (JSON con esquema estricto)
+                               │          └─ sin clave / fallo ─► Tesseract + OpenCV
+                               │          + avisos de coherencia (suma ≠ total, IVA, campos que faltan)
+                               └─ no ─► parser de PDF de siempre (sin cambios)
+      ◄─ resumen completo
+Revisión editable (frontend, solo fotos)
+      ─► /api/ocr/confirm ─► valida (foto, importes coherentes) ─► catálogo + líneas repetidas ─► ingesta común
+```
 
-- Request: mantener `file_content_b64`, añadir opcional `mime_type` y `source_type_detected` en logs; permitir alias `pdf_b64` por compatibilidad.
-- Response: añadir campos opcionales `processing_profile` (`pdf-text`, `pdf-ocr`, `image-ocr`) y `warnings` (ej. "texto escaso", "deskew aplicado").
-- Errores: mapear a HTTP 415 para formatos no soportados, 422 para ticket no detectado o OCR insuficiente, 504/500 para timeouts o fallos internos.
+- **PDF:** misma respuesta que antes (sin `processing_profile` ni avisos nuevos), la misma revisión de solo lectura y el mismo guardado reprocesando el PDF. Un test compara la respuesta con la del parser de PDF directamente.
+- **`/api/ocr/confirm`** solo admite fotos y guarda los datos revisados sin repetir el OCR. Comprueba lo que exigiría la base de datos (cantidad × precio unitario = importe, suma = total) para devolver un motivo legible en lugar de un error genérico.
+- La foto original se guarda en `tickets_pdf`, como los PDF. La migración `0004_ticket_photos.sql` amplía la restricción de extensión a `jpg/jpeg/png/webp/heic/heif`.
+- Límites: el cuerpo JSON de `/api/ocr` admite 16 MB (antes, 2 MB por defecto en axum) y el proxy nginx del frontend también (antes, 1 MB). La foto tiene un máximo de 10 MB.
+- La lectura completa (todos los modelos) tiene un presupuesto de `OCR_VISION_TIMEOUT` (25 s), por debajo del timeout del backend (`INTELLIGENCE_TIMEOUT_SECS`, 30 s), para que siempre quede margen para Tesseract.
+- Privacidad: la foto sale a OpenRouter y al proveedor del modelo; la interfaz lo indica. En los logs solo aparecen el modelo, la latencia, el coste y el número de productos.
 
-### 5.3 Backend (Rust)
+## 4. Pendiente / ideas
 
-- Validar MIME segun cabecera del archivo y nombre; rechazar extensiones peligrosas antes de enviar al worker.
-- Propagar `mime_type` en `OcrProcessTicketRequest`; mapear codigos de error nuevos a respuestas claras para frontend.
-- Ajustar mensajes de trazas para indicar pipeline usado y motivo de rechazo.
-
-### 5.4 Frontend
-
-- Mantener soporte de seleccion/preview de imagen. Ajustar mensajes de error para los nuevos codigos (no ticket, formato no soportado, imagen ilegible).
-- Mostrar recomendacion breve cuando llegue `warnings` (por ejemplo, pedir foto mas nítida).
-
-### 5.5 Testing
-
-- Fixtures: crear imagenes de ejemplo (nítida, borrosa, inclinada, recortada) y un PDF escaneado. Guardar en `docs/Tickets/fixtures`.
-- Unit tests en Python para:
-  - Deteccion de MIME.
-  - Pipeline de preprocesado (deskew, binarizacion) retornando texto no vacio.
-  - Errores por texto insuficiente o formato no soportado.
-- Integration: test FastAPI `/ocr/process` con imagen valida, PDF escaneado y casos de error (formato, texto vacio).
-- Backend: test de mapeo de errores del worker y validacion de MIME en `TicketProcessPayload`.
-
-## 6. Entregables
-
-- Codigo del worker con pipeline de imagen y fallback OCR para PDFs sin texto.
-- Nuevos codigos de error y mensajes tipados en worker y backend.
-- Actualizacion de `requirements.txt`, README del servicio, y guia de ejecucion (instalacion de Tesseract).
-- Fixtures de prueba y suite de tests automatizados para imagenes.
-- Ajustes de frontend para surfacing de errores/warnings.
-
-## 7. Riesgos y mitigacion
-
-- Dependencia externa Tesseract: documentar instalacion y fallback a texto vacio con error claro si el binario no existe.
-- Rendimiento: limitar resolucion y tiempo de OCR; timeout configurable.
-- Formatos raros (HEIC/WEBP grandes): validar y comprimir previo al OCR.
-
-## 8. Preguntas abiertas
-
-1) Disponemos de Tesseract instalado en el entorno CI/dev o se necesita contenedor con el binario?  
-2) Limite de tamaño aceptado para imagenes (MB/resolucion) antes de rechazar?  
-3) Preferencia de idioma OCR (solo `spa` o añadir `eng` como fallback por marcas/visa)?  
-4) Deseamos devolver el texto completo al frontend o solo el resumen actual?
+- **PDF escaneados** (sin texto): hoy fallan como antes. Podrían rasterizarse y leerse como foto, pero eso cambiaría el camino de los PDF y se dejó fuera a propósito.
+- **Reducir la foto en el navegador** antes de subirla (menos datos móviles y menos almacenamiento). HEIC no se puede decodificar en Chrome con canvas.
+- **Vista previa de HEIC:** solo Safari la muestra; en el resto se ve un aviso.
+- Detectado en el camino de PDF y **sin tocar** a propósito: el patrón de método de pago espera `TARJJETA` (errata), así que "TARJETA BANCARIA" escrito completo no se reconoce. Además, tras guardar un PDF la lista muestra "(0 prods)", porque la respuesta de ingesta trae `productos_insertados` y la interfaz cuenta `productos`.

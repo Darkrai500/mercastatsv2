@@ -89,6 +89,14 @@ class ProcessTicketResponse(BaseModel):
         default_factory=list,
         description="Desglose de IVA encontrado en el ticket",
     )
+    processing_profile: Optional[str] = Field(
+        None,
+        description="Lector usado: pdf-text, image-vision, image-ocr-local, pdf-scan-vision...",
+    )
+    warnings: List[str] = Field(
+        default_factory=list,
+        description="Avisos no bloqueantes del parser (el backend los cuenta como avisos)",
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,

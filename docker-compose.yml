@@ -15,6 +15,7 @@ services:
       - ./backend/migrations/0001_initial_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./backend/migrations/0002_ml_views.sql:/docker-entrypoint-initdb.d/02-ml-views.sql:ro
       - ./backend/migrations/0003_google_gmail_sync.sql:/docker-entrypoint-initdb.d/03-google-gmail-sync.sql:ro
+      - ./backend/migrations/0004_ticket_photos.sql:/docker-entrypoint-initdb.d/04-ticket-photos.sql:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -64,6 +65,9 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
       - INTELLIGENCE_API_KEY=${INTELLIGENCE_API_KEY:-}
       - APP_TIMEZONE=${APP_TIMEZONE:-Europe/Madrid}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OCR_VISION_MODELS=${OCR_VISION_MODELS:-anthropic/claude-haiku-5.5,google/gemini-3.1-flash-lite}
+      - OCR_VISION_TIMEOUT=${OCR_VISION_TIMEOUT:-25}
     ports:
       - "${INTELLIGENCE_PORT:-8001}:8001"
     depends_on:

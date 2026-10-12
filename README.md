@@ -7,7 +7,7 @@
 [![Docker](https://img.shields.io/badge/infra-Docker-2496ED?logo=docker)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Mercastats convierte tickets de compra en un historial consultable de gasto, productos y hábitos de consumo. Es un monorepo full-stack con una API en Rust, un cliente Leptos compilado a WebAssembly, PostgreSQL y un servicio Python para extracción de tickets y predicciones.
+Mercastats convierte tickets de compra en un historial consultable de gasto, productos y hábitos de consumo. Es un monorepo full-stack con una API en Rust, un cliente Leptos compilado a WebAssembly, PostgreSQL y un servicio Python para leer tickets (PDF y fotos) y hacer predicciones.
 
 ## Demo pública
 
@@ -19,14 +19,22 @@ El despliegue previsto para la demo está en [mercastats.app](https://mercastats
 
 Usa únicamente datos sintéticos o no sensibles. El repositorio no promete borrado automático de cuentas o tickets.
 
+En una instalación nueva esa cuenta no existe: regístrala desde la pantalla de registro y, para que tenga el modo demo, configura `DEMO_USER_EMAIL=demo@demo.com` (ver [Modo demo](#modo-demo)).
+
+## Modo demo
+
+La cuenta cuyo email coincide con `DEMO_USER_EMAIL` entra en modo de solo lectura. Puede consultar el dashboard, el histórico, las estadísticas, la evolución mensual y la predicción, pero no puede subir tickets (PDF ni fotos), conectar Gmail ni sincronizarlo. La interfaz muestra la etiqueta «Modo Demo», oculta el panel de Gmail y avisa si se intenta subir un ticket. El backend rechaza esas acciones igualmente, así que la restricción no depende de la interfaz.
+
 ## Qué incluye
 
 - Registro e inicio de sesión con contraseñas protegidas mediante bcrypt y sesiones JWT.
-- Ingesta de tickets PDF e imagen, con normalización de productos y persistencia relacional.
+- Ingesta de tickets en PDF digital y de fotos de tickets en papel, con normalización de productos y persistencia relacional.
+- Subida múltiple con arrastrar y soltar. Un ticket cuyo número de factura ya está guardado se rechaza como duplicado.
 - Inicio de sesión con Google y sincronización automática de los tickets digitales que Mercadona envía por correo (opcional, ver [más abajo](#inicio-de-sesión-con-google-y-sincronización-con-gmail)).
-- Dashboard de gasto, historial de tickets y estadísticas agregadas.
+- Dashboard de gasto, histórico de tickets ordenable y paginado, estadísticas agregadas (gasto diario, distribución por día de la semana y por hora, productos más comprados) y evolución mensual con media móvil de tres meses.
 - Predicción de la próxima compra (día y hora, gasto estimado y productos que toca reponer) mediante un modelo estadístico por usuario en el microservicio Python.
-- Contenedores independientes y comprobaciones de salud para los servicios.
+- Modo demo de solo lectura para una cuenta configurable.
+- Contenedores independientes para cada servicio. PostgreSQL tiene comprobación de salud y cada servicio expone `/health`.
 
 ## Arquitectura
 
@@ -36,11 +44,13 @@ flowchart LR
     Nginx -->|/api| API["Axum API / Rust"]
     API --> DB[(PostgreSQL)]
     API --> Intelligence["FastAPI intelligence service"]
+    API --> Google["Google OAuth y Gmail API"]
     Intelligence --> OCR["PDF/image parsing"]
     Intelligence --> ML["purchase prediction"]
+    Intelligence --> Vision["OpenRouter, modelo de visión"]
 ```
 
-La separación mantiene la autenticación, la orquestación y el acceso tipado a datos en Rust, mientras reserva Python para OCR y experimentación con modelos. El cliente consume la API desde WebAssembly y Nginx actúa como servidor estático y proxy.
+La separación mantiene la autenticación, la orquestación y el acceso tipado a datos en Rust, mientras reserva Python para la lectura de tickets y la predicción. Solo el backend habla con Google, y solo el servicio de inteligencia envía fotos a OpenRouter. El cliente consume la API desde WebAssembly y Nginx actúa como servidor estático y proxy.
 
 ## Arranque rápido (macOS, Linux y Windows)
 
@@ -103,11 +113,24 @@ docker compose down
 
 Añade `--volumes` solo si también quieres eliminar la base de datos local.
 
+## Configuración principal
+
+Estas son las variables que conviene conocer antes de arrancar el stack. Las de Google, Gmail y fotos tienen su propia sección.
+
+| Variable | Para qué sirve |
+| --- | --- |
+| `JWT_SECRET` | Firma las sesiones (tokens válidos 24 horas). Obligatoria. |
+| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL. |
+| `INTELLIGENCE_API_KEY` | Clave que el backend envía al servicio de inteligencia y que este exige si está definida. Opcional en local; obligatoria en producción (ver [seguridad](#seguridad-y-privacidad)). |
+| `CORS_ORIGINS` | Orígenes que pueden llamar a la API y al servicio de inteligencia. |
+| `DEMO_USER_EMAIL` | Cuenta en [modo demo](#modo-demo). |
+| `APP_TIMEZONE` | Zona horaria de las tiendas para la predicción (por defecto `Europe/Madrid`). |
+
 ## Inicio de sesión con Google y sincronización con Gmail
 
 Opcional. Con credenciales de Google configuradas, el login y el registro muestran el botón **Continuar con Google**. Un único consentimiento da identidad y acceso de **solo lectura** a Gmail; a partir de ahí Mercastats:
 
-1. busca en la bandeja los correos de `ticket_digital@mail.mercadona.com` con un PDF adjunto,
+1. busca en la bandeja los correos de `ticket_digital@mail.mercadona.com` con un PDF adjunto, comprobando que el remitente real sea esa dirección (no solo el nombre que se muestra) y que el adjunto sea un PDF válido,
 2. pasa cada PDF por el mismo OCR y la misma ingesta que la subida manual,
 3. lo repite solo cada 30 minutos (y al pulsar **Sincronizar ahora** en «Subir tickets»).
 
@@ -135,6 +158,30 @@ Cada correo se procesa una sola vez, y un ticket que ya está en la base de dato
 - **Cuentas:** entrar con Google crea una cuenta sin contraseña. Si ya existe una cuenta con contraseña para ese email, Google **no se enlaza solo** (el registro con contraseña no verifica el correo): inicia sesión con tu contraseña y pulsa **Conectar Gmail**. El Gmail conectado no tiene que coincidir con el email de la cuenta.
 - **Desconectar** revoca el acceso en Google y borra el token; los tickets ya importados se conservan.
 - **Problemas frecuentes:** `redirect_uri_mismatch` → la URI de Google Cloud no coincide con `GOOGLE_REDIRECT_URI`; «Acceso bloqueado: la app no ha completado la verificación» → falta tu correo como usuario de prueba; «Gmail denegó el acceso» → la Gmail API no está habilitada en el proyecto.
+
+## Fotos de tickets en papel
+
+En «Subir tickets» también se puede subir la foto de un ticket en papel (JPG, PNG, WEBP o HEIC). La lee un modelo de visión a través de [OpenRouter](https://openrouter.ai/) y, antes de guardarla, se revisa junto a la imagen en un formulario editable (factura, fecha, hora, total y productos). El resultado indica si lo leyó el modelo («Leído con IA») o el lector local de Tesseract («Lector local»), que siempre añade un aviso. Los PDF siguen exactamente el mismo camino de siempre y no salen del servidor.
+
+Antes de guardar, el formulario avisa si faltan la factura, la fecha, la hora o el total, si la suma de los productos no coincide con el total o si el desglose de IVA no cuadra. Estos avisos no bloquean el guardado, pero un producto cuyo importe no cuadra con su cantidad y precio unitario sí. Al guardar, los nombres sin tildes se igualan con el catálogo cuando hay una única coincidencia («PINA PELADA» pasa a «PIÑA PELADA» si el catálogo lo tiene) y las líneas repetidas de un mismo producto se unen.
+
+| Variable | Para qué sirve |
+| --- | --- |
+| `OPENROUTER_API_KEY` | Clave de OpenRouter. Sin ella las fotos se leen con Tesseract en local, bastante menos fiable. |
+| `OCR_VISION_MODELS` | Modelos a probar en orden si uno falla (por defecto `anthropic/claude-haiku-5.5,google/gemini-3.1-flash-lite`). |
+| `OCR_VISION_TIMEOUT` | Segundos máximos para leer una foto entre todos los modelos (25 por defecto; menos que `INTELLIGENCE_TIMEOUT_SECS`). |
+
+- **Coste:** unos 0,001 $ por foto con Claude Haiku 5.5. Conviene ponerle a la clave un límite de crédito en OpenRouter.
+- **Privacidad:** la foto se envía a OpenRouter y al proveedor del modelo, reducida a 2000 píxeles en su lado largo.
+- Por qué este enfoque y cómo se evaluó: [`docs/IMAGE_TICKET_OCR_PLAN.md`](docs/IMAGE_TICKET_OCR_PLAN.md).
+
+## Seguridad y privacidad
+
+- Las contraseñas se guardan con bcrypt (coste 12) y las sesiones son JWT válidos 24 horas.
+- El token de acceso de Google se guarda cifrado con AES-256-GCM; su clave, `TOKEN_ENCRYPTION_KEY`, solo existe en el entorno.
+- Si `INTELLIGENCE_API_KEY` está definida, el servicio de inteligencia rechaza las peticiones que no la envíen.
+- Los logs de OCR, predicción y sincronización no incluyen importes, productos, facturas ni emails: solo recuentos, tiempos, costes y códigos de error.
+- Pendiente: no hay límite de peticiones (rate limiting) ni política de retención o borrado de tickets. El estado completo de los controles está en [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md).
 
 ## Desarrollo y comprobaciones
 
@@ -170,15 +217,38 @@ Para evaluar el predictor con usuarios sintéticos (precisión del día, error d
 cd intelligence-service && python backtest.py
 ```
 
+Pruebas del lanzador. No tocan el sistema ni usan `sudo`, y `./run.sh test` no las ejecuta:
+
+```bash
+python3 tests/pacman_installer_test.py
+python3 tests/docker_bootstrap_test.py
+```
+
+Para arrancar solo una parte del stack en desarrollo, usa `dev.js` directamente (`./run.sh` arranca todo):
+
+```bash
+node dev.js --backend-only        # solo la API Rust
+node dev.js --frontend-only       # solo el frontend
+node dev.js --intelligence-only   # solo el servicio de inteligencia
+node dev.js --no-intelligence     # todo menos el servicio de inteligencia
+node dev.js --release             # API Rust compilada en modo release
+```
+
+Las migraciones de `backend/migrations/` se aplican al crear el volumen de PostgreSQL. Las posteriores a la 0002 se vuelven a aplicar en cada `./run.sh`, así que deben poder ejecutarse varias veces.
+
 ## Estructura
 
 ```text
 backend/               API Axum, autenticación, SQLx e integración de tickets
 frontend/              SPA Leptos/WASM y configuración de Nginx
-intelligence-service/  Servicio FastAPI de OCR y predicción
+intelligence-service/  Servicio FastAPI de OCR, lectura de fotos y predicción
 ocr-service/           Prototipo independiente del parser de tickets
 backend/migrations/    Esquema, funciones y vistas versionadas de PostgreSQL
 docs/                  Decisiones, planes técnicos y notas de implementación
+tests/                 Pruebas del lanzador, con comandos simulados
+scripts/               Funciones del lanzador para Docker y pacman
+run.sh, run.ps1        Lanzadores para macOS/Linux y Windows
+dev.js                 Arranque de desarrollo de la API, el frontend y el servicio Python
 docker-compose.yml     Orquestación local del stack principal
 ```
 
@@ -186,6 +256,7 @@ docker-compose.yml     Orquestación local del stack principal
 
 - La extracción está especializada en formatos de Mercadona; no es un parser universal de recibos.
 - La sincronización con Gmail asume que el ticket llega como PDF adjunto desde la dirección configurada. Sus pruebas automáticas usan un Gmail simulado con datos sintéticos; no se han contrastado con correos reales de Mercadona.
+- Sin `OPENROUTER_API_KEY` las fotos se leen con Tesseract, mucho menos fiable: revisa siempre los importes antes de guardar.
 - La predicción necesita al menos 5 días con compra para mostrarse y su confianza es deliberadamente conservadora con historiales cortos. No modela festivos ni cambios de hábito recientes.
 - La configuración local no debe reutilizar secretos ni credenciales de producción.
 - Antes de subir un ticket real, revisa su contenido: un recibo puede incluir datos de pago, localización y hábitos de compra.

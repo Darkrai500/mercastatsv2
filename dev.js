@@ -35,6 +35,27 @@ if (intelligenceOnly && noIntelligence) {
   process.exit(1);
 }
 
+// Uvicorn no lee .env (el backend sí, con dotenvy): el lector de fotos del servicio Python
+// recibe aquí sus variables. Solo esas, y si ya están en el entorno, manda el entorno.
+const PHOTO_READER_VARS = ["OPENROUTER_API_KEY", "OCR_VISION_MODELS", "OCR_VISION_TIMEOUT"];
+
+function readDotEnv(file) {
+  const values = {};
+  if (!fs.existsSync(file)) return values;
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (match) values[match[1]] = match[2].replace(/^(['"])(.*)\1$/, "$2");
+  }
+  return values;
+}
+
+const dotEnv = readDotEnv(path.join(projectRoot, ".env"));
+const photoReaderEnv = Object.fromEntries(
+  PHOTO_READER_VARS.filter((name) => process.env[name] === undefined && dotEnv[name]).map(
+    (name) => [name, dotEnv[name]]
+  )
+);
+
 const commands = [];
 
 const runIntelligence = intelligenceOnly ? true : !noIntelligence;
@@ -60,6 +81,7 @@ if (runIntelligence) {
     args: ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8001", "--reload"],
     cwd: intelligenceDir,
     color: colors.ocr, // Reusing green color
+    env: photoReaderEnv,
   });
 }
 

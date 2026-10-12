@@ -1,5 +1,7 @@
-use crate::api::tickets::{process_ticket_ocr, ProcessTicketResponse};
-use crate::components::{Button, ButtonVariant, Card, GmailSyncCard};
+use crate::api::tickets::{confirm_photo_ticket, process_ticket_ocr, ProcessTicketResponse};
+use crate::components::{
+    Button, ButtonVariant, Card, GmailSyncCard, PhotoTicketEditor, TicketDraft,
+};
 use leptos::*;
 use std::collections::HashSet;
 use wasm_bindgen::JsCast;
@@ -23,6 +25,10 @@ struct FileStatus {
     result: Option<ProcessTicketResponse>,
     error: Option<String>,
     preview_url: Option<String>,
+    /// Foto de un ticket en papel: su lectura se revisa y corrige antes de guardarla
+    is_photo: bool,
+    /// Datos editables de la foto (solo fotos, cuando ya se han leído)
+    draft: Option<RwSignal<TicketDraft>>,
 }
 
 #[component]
@@ -41,9 +47,16 @@ pub fn Upload() -> impl IntoView {
         files
             .get()
             .into_iter()
-            .filter(|f| f.status == UploadStatus::Review)
+            // Una foto que se está guardando sigue en la revisión: si falla, se corrige ahí
+            .filter(|f| {
+                f.status == UploadStatus::Review
+                    || (f.draft.is_some() && f.status == UploadStatus::Ingesting)
+            })
             .collect::<Vec<_>>()
     });
+
+    // Los borradores de las fotos se crean al terminar el OCR, fuera del ámbito del componente
+    let owner = Owner::current();
 
     // Obtener email y estado demo del usuario de localStorage
     create_effect(move |_| {
@@ -63,8 +76,10 @@ pub fn Upload() -> impl IntoView {
 
     let build_file_status = |file: File| {
         let id = format!("{}-{}", file.name(), js_sys::Date::now());
+        let is_photo = is_photo_file(&file);
         let mut preview_url = None;
-        if file.type_().starts_with("image/") {
+        // Los navegadores (salvo Safari) no muestran HEIC: mejor el icono que una imagen rota
+        if file.type_().starts_with("image/") && !is_heic(&file) {
             preview_url = create_object_url(&file).ok();
         }
 
@@ -75,6 +90,8 @@ pub fn Upload() -> impl IntoView {
             result: None,
             error: None,
             preview_url,
+            is_photo,
+            draft: None,
         }
     };
 
@@ -210,6 +227,13 @@ pub fn Upload() -> impl IntoView {
                             } else {
                                 UploadStatus::Review
                             };
+                            if f.is_photo && !ingest {
+                                let draft = TicketDraft::from_summary(&response.ocr);
+                                f.draft = Some(match owner {
+                                    Some(owner) => with_owner(owner, || create_rw_signal(draft)),
+                                    None => create_rw_signal(draft),
+                                });
+                            }
                             f.result = Some(response.clone());
                         }
                     });
@@ -262,12 +286,68 @@ pub fn Upload() -> impl IntoView {
         }
     };
 
+    // Fotos: se guardan los datos revisados sin repetir el OCR. Si algo no cuadra, el
+    // ticket se queda en la revisión con el motivo para corregirlo.
+    let confirm_photo = move |target: FileStatus, draft: RwSignal<TicketDraft>| {
+        if is_demo.get() {
+            set_upload_error.set(Some(
+                "Como usuario demo no puedes insertar tickets. Crea un usuario para poder hacerlo."
+                    .to_string(),
+            ));
+            return;
+        }
+
+        let id = target.id.clone();
+        let set_status = move |status: UploadStatus, error: Option<String>| {
+            set_files.update(|files| {
+                if let Some(f) = files.iter_mut().find(|f| f.id == id) {
+                    f.status = status;
+                    f.error = error;
+                }
+            });
+        };
+
+        let request = match draft.with_untracked(TicketDraft::to_request) {
+            Ok(request) => request,
+            Err(message) => {
+                set_status(UploadStatus::Review, Some(message));
+                return;
+            }
+        };
+
+        set_status(UploadStatus::Ingesting, None);
+        let id = target.id.clone();
+        spawn_local(async move {
+            match confirm_photo_ticket(target.file.clone(), request).await {
+                Ok(ingestion) => set_files.update(|files| {
+                    if let Some(f) = files.iter_mut().find(|f| f.id == id) {
+                        f.status = UploadStatus::Success;
+                        f.error = None;
+                        if let Some(result) = f.result.as_mut() {
+                            result.ingestion = Some(ingestion);
+                        }
+                    }
+                }),
+                Err(err) => set_files.update(|files| {
+                    if let Some(f) = files.iter_mut().find(|f| f.id == id) {
+                        f.status = UploadStatus::Review;
+                        f.error = Some(err);
+                    }
+                }),
+            }
+            refresh_review_modal();
+        });
+    };
+
     let confirm_file =
         move |id: String| {
             if let Some(target) = files.get().into_iter().find(|f| {
                 f.id == id && matches!(f.status, UploadStatus::Review | UploadStatus::Error)
             }) {
-                process_file(target, true);
+                match target.draft {
+                    Some(draft) => confirm_photo(target, draft),
+                    None => process_file(target, true),
+                }
             }
         };
 
@@ -371,7 +451,7 @@ pub fn Upload() -> impl IntoView {
                         <input
                             node_ref=file_input_ref
                             type="file"
-                            accept="image/*,.pdf"
+                            accept="image/*,.heic,.heif,.pdf"
                             class="hidden"
                             multiple=true
                             on:change=handle_file_select
@@ -390,7 +470,7 @@ pub fn Upload() -> impl IntoView {
                                     "Arrastra tus tickets aquí o haz clic para seleccionar"
                                 </p>
                                 <p class="text-sm text-gray-600">
-                                    "Soportamos PDF e imágenes (JPG, PNG)"
+                                    "PDF del ticket digital o foto del ticket en papel (JPG, PNG, HEIC)"
                                 </p>
                             </div>
                         </div>
@@ -458,6 +538,22 @@ pub fn Upload() -> impl IntoView {
                                                                 UploadStatus::Processing => view! { <span class="text-blue-600 animate-pulse">"Procesando..."</span> }.into_view(),
                                                                 UploadStatus::Review => view! { <span class="text-amber-600 font-medium">"Listo para confirmar"</span> }.into_view(),
                                                                 UploadStatus::Ingesting => view! { <span class="text-blue-600 animate-pulse">"Guardando..."</span> }.into_view(),
+                                                                UploadStatus::Success if file.draft.is_some() => {
+                                                                    let insertados = result
+                                                                        .as_ref()
+                                                                        .and_then(|r| r.ingestion.as_ref())
+                                                                        .and_then(|i| i.productos_insertados)
+                                                                        .unwrap_or(0);
+                                                                    let total = file
+                                                                        .draft
+                                                                        .and_then(|d| d.with_untracked(|d| crate::components::photo_ticket_editor::parse_amount(&d.total)))
+                                                                        .unwrap_or(0.0);
+                                                                    view! {
+                                                                        <span class="text-green-600 font-medium">
+                                                                            {format!("Guardado: {:.2}€ ({} prods)", total, insertados)}
+                                                                        </span>
+                                                                    }.into_view()
+                                                                },
                                                                 UploadStatus::Success => {
                                                                     if let Some(ref res) = result {
                                                                         if let Some(ingestion) = &res.ingestion {
@@ -619,11 +715,11 @@ pub fn Upload() -> impl IntoView {
                             </div>
                         </div>
                         <div>
-                            <h3 class="font-semibold text-gray-900 mb-2">"Consejos para mejores resultados"</h3>
+                            <h3 class="font-semibold text-gray-900 mb-2">"Consejos para fotos de tickets"</h3>
                             <ul class="text-sm text-gray-600 space-y-1">
-                                <li>"• Asegúrate de que el ticket esté bien iluminado"</li>
-                                <li>"• Evita sombras y reflejos"</li>
-                                <li>"• Captura el ticket completo"</li>
+                                <li>"• Ticket estirado y completo, de la cabecera al desglose de IVA"</li>
+                                <li>"• Buena luz, sin sombras ni reflejos sobre los importes"</li>
+                                <li>"• Antes de guardar, comprueba los datos leídos con la foto"</li>
                             </ul>
                         </div>
                     </div>
@@ -642,6 +738,9 @@ pub fn Upload() -> impl IntoView {
                             <h3 class="font-semibold text-gray-900 mb-2">"Tu privacidad es importante"</h3>
                             <p class="text-sm text-gray-600">
                                 "Tus tickets se almacenan de forma segura y solo tú puedes acceder a ellos."
+                            </p>
+                            <p class="text-sm text-gray-600 mt-2">
+                                "Las fotos de tickets en papel las lee un servicio externo de IA; los PDF se procesan solo en nuestro servidor."
                             </p>
                         </div>
                     </div>
@@ -680,6 +779,9 @@ pub fn Upload() -> impl IntoView {
                                         each=move || review_files.get()
                                         key=|f| f.id.clone()
                                         children=move |file| {
+                                            if let Some(draft) = file.draft {
+                                                return photo_review_card(file, draft, confirm_file, remove_file);
+                                            }
                                             let id = file.id.clone();
                                             let status = file.status.clone();
                                             let summary = file.result.clone().map(|r| r.ocr);
@@ -815,7 +917,7 @@ pub fn Upload() -> impl IntoView {
                                                         </div>
                                                     </div>
                                                 </div>
-                                            }
+                                            }.into_view()
                                         }
                                     />
                                 </div>
@@ -828,9 +930,112 @@ pub fn Upload() -> impl IntoView {
     }
 }
 
+/// Tarjeta de revisión de una foto: la imagen junto al formulario editable de su lectura.
+fn photo_review_card(
+    file: FileStatus,
+    draft: RwSignal<TicketDraft>,
+    confirm_file: impl Fn(String) + Copy + 'static,
+    remove_file: impl Fn(String) + Copy + 'static,
+) -> View {
+    let saving = file.status == UploadStatus::Ingesting;
+    let summary = file.result.as_ref().map(|r| r.ocr.clone());
+    let warnings = summary
+        .as_ref()
+        .map(|s| s.warnings.clone())
+        .unwrap_or_default();
+    let local_reader = summary
+        .as_ref()
+        .and_then(|s| s.processing_profile.as_deref())
+        .is_some_and(|p| p.ends_with("ocr-local"));
+    let (id_confirm, id_remove) = (file.id.clone(), file.id.clone());
+
+    view! {
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm animate-slide-up">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="md:w-56 flex-shrink-0">
+                    {match file.preview_url.clone() {
+                        Some(url) => view! {
+                            <a href=url.clone() target="_blank" rel="noopener" title="Ver la foto completa">
+                                <img src=url alt="Foto del ticket" class="w-full max-h-[60vh] object-contain rounded-lg border border-gray-200 bg-gray-50" />
+                            </a>
+                        }.into_view(),
+                        None => view! {
+                            <div class="h-40 rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-xs text-gray-500 text-center px-4">
+                                "Vista previa no disponible en este navegador"
+                            </div>
+                        }.into_view(),
+                    }}
+                </div>
+
+                <div class="flex-1 min-w-0 space-y-3">
+                    <div class="flex items-start justify-between gap-2 flex-wrap">
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-gray-900 truncate">{file.file.name()}</p>
+                            <p class="text-xs text-gray-500">"Foto de ticket: comprueba los datos con la imagen y corrige lo que haga falta."</p>
+                        </div>
+                        <span class="px-3 py-1 text-xs bg-primary-50 text-primary-700 rounded-full border border-primary-100">
+                            {if local_reader { "Lector local" } else { "Leído con IA" }}
+                        </span>
+                    </div>
+
+                    {(!warnings.is_empty()).then(|| view! {
+                        <ul class="space-y-1">
+                            {warnings.into_iter().map(|w| view! {
+                                <li class="text-xs bg-amber-50 text-amber-700 rounded-md border border-amber-100 px-2 py-1">{w}</li>
+                            }).collect_view()}
+                        </ul>
+                    })}
+
+                    <PhotoTicketEditor draft=draft />
+
+                    {file.error.clone().map(|e| view! {
+                        <p class="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{e}</p>
+                    })}
+
+                    <div class="flex gap-2 justify-end">
+                        <Button
+                            loading=saving
+                            disabled=saving
+                            on:click=move |_| confirm_file(id_confirm.clone())
+                        >
+                            "Guardar ticket"
+                        </Button>
+                        <Button
+                            variant=ButtonVariant::Secondary
+                            disabled=saving
+                            on:click=move |_| remove_file(id_remove.clone())
+                        >
+                            "Descartar"
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    .into_view()
+}
+
 fn create_object_url(file: &File) -> Result<String, String> {
     web_sys::Url::create_object_url_with_blob(file)
         .map_err(|_| "Error al crear preview".to_string())
+}
+
+const PHOTO_EXTENSIONS: [&str; 6] = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
+
+fn has_extension(file: &File, extensions: &[&str]) -> bool {
+    let name = file.name().to_lowercase();
+    extensions
+        .iter()
+        .any(|ext| name.ends_with(&format!(".{ext}")))
+}
+
+fn is_photo_file(file: &File) -> bool {
+    file.type_().starts_with("image/") || has_extension(file, &PHOTO_EXTENSIONS)
+}
+
+fn is_heic(file: &File) -> bool {
+    matches!(file.type_().as_str(), "image/heic" | "image/heif")
+        || has_extension(file, &["heic", "heif"])
 }
 
 fn is_allowed_file(file: &File) -> bool {

@@ -340,6 +340,17 @@ async fn ocr_process(State(s): State<Shared>, Json(req): Json<Value>) -> impl In
         .decode(req["file_content_b64"].as_str().unwrap_or_default())
         .unwrap_or_default();
     let text = String::from_utf8_lossy(&bytes).to_string();
+    if text.contains("NOTICKET") {
+        // Así rechaza el lector de fotos una imagen que no es un ticket
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({
+                "detail": "La imagen no parece un ticket de Mercadona.",
+                "code": "ticket_rejected"
+            })),
+        )
+            .into_response();
+    }
     if text.contains("BROKEN") {
         return StatusCode::UNPROCESSABLE_ENTITY.into_response();
     }

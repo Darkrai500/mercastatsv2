@@ -69,6 +69,17 @@ pub struct OcrResponseSummary {
     pub warnings: Vec<String>,
     #[serde(default)]
     pub raw_text_preview: Option<String>,
+    // Datos completos para revisar y corregir la lectura de una foto antes de guardarla
+    #[serde(default)]
+    pub fecha_hora: Option<String>,
+    #[serde(default)]
+    pub ubicacion: Option<String>,
+    #[serde(default)]
+    pub metodo_pago: Option<String>,
+    #[serde(default)]
+    pub numero_operacion: Option<String>,
+    #[serde(default)]
+    pub iva_desglose: Vec<IvaBreakdown>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -258,6 +269,59 @@ pub async fn process_ticket_ocr(file: File, ingest: bool) -> Result<ProcessTicke
             .await
             .map(|e| e.error)
             .unwrap_or_else(|_| format!("Error {}: No se pudo procesar el ticket", status));
+        Err(error)
+    }
+}
+
+/// Foto de ticket revisada (y quizá corregida) por el usuario, lista para guardar.
+/// `confirm_photo_ticket` rellena el nombre y el contenido del archivo al enviarla.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfirmPhotoTicketRequest {
+    pub file_name: String,
+    pub file_content_b64: String,
+    pub numero_factura: String,
+    /// Hora local del ticket, `AAAA-MM-DDTHH:MM:SS`
+    pub fecha_hora: String,
+    pub total: f64,
+    pub tienda: Option<String>,
+    pub ubicacion: Option<String>,
+    pub metodo_pago: Option<String>,
+    pub numero_operacion: Option<String>,
+    pub productos: Vec<TicketProduct>,
+    pub iva_desglose: Vec<IvaBreakdown>,
+}
+
+/// Guarda la foto de un ticket con los datos revisados, sin volver a ejecutar el OCR
+pub async fn confirm_photo_ticket(
+    file: File,
+    mut reviewed: ConfirmPhotoTicketRequest,
+) -> Result<TicketIngestionResponse, String> {
+    let url = format!("{}/ocr/confirm", API_BASE_URL);
+    let token = get_auth_token().ok_or_else(|| "No hay sesion activa".to_string())?;
+
+    reviewed.file_name = file.name();
+    reviewed.file_content_b64 = file_to_base64(&file).await?;
+
+    let response = Request::post(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .json(&reviewed)
+        .map_err(|e| format!("Error al preparar peticion: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Error de conexion: {}", e))?;
+
+    if response.ok() {
+        response
+            .json::<TicketIngestionResponse>()
+            .await
+            .map_err(|e| format!("Error al procesar respuesta: {}", e))
+    } else {
+        let status = response.status();
+        let error = response
+            .json::<ApiError>()
+            .await
+            .map(|e| e.error)
+            .unwrap_or_else(|_| format!("Error {}: No se pudo guardar el ticket", status));
         Err(error)
     }
 }
