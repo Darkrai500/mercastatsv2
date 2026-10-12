@@ -89,6 +89,10 @@ class ProcessTicketResponse(BaseModel):
         default_factory=list,
         description="Desglose de IVA encontrado en el ticket",
     )
+    warnings: List[str] = Field(
+        default_factory=list,
+        description="Avisos no bloqueantes del parser (el backend los cuenta como avisos)",
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,
