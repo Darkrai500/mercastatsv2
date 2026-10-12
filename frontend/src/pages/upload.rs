@@ -1,5 +1,5 @@
 use crate::api::tickets::{process_ticket_ocr, ProcessTicketResponse};
-use crate::components::{Button, ButtonVariant, Card};
+use crate::components::{Button, ButtonVariant, Card, GmailSyncCard};
 use leptos::*;
 use std::collections::HashSet;
 use wasm_bindgen::JsCast;
@@ -34,6 +34,8 @@ pub fn Upload() -> impl IntoView {
     let (is_demo, set_is_demo) = create_signal(false);
     let (upload_error, set_upload_error) = create_signal(None::<String>);
     let (review_modal_open, set_review_modal_open) = create_signal(false);
+
+    let show_gmail = create_memo(move |_| !is_demo.get());
 
     let review_files = create_memo(move |_| {
         files
@@ -348,6 +350,11 @@ pub fn Upload() -> impl IntoView {
                     "Analiza tus compras y descubre patrones de consumo. Puedes subir múltiples archivos a la vez."
                 </p>
             </div>
+
+            // Sincronización automática con Gmail (no aplica a la cuenta demo). Va tras un memo:
+            // `set_is_demo` notifica aunque el valor no cambie y el panel se recrearía, perdiendo
+            // el aviso pendiente que ya consumió la primera instancia.
+            {move || show_gmail.get().then(|| view! { <GmailSyncCard /> })}
 
             // Upload card
             <Card class="animate-slide-up".to_string()>

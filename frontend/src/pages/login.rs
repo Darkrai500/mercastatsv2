@@ -1,5 +1,6 @@
 use crate::api::auth::{login_user, LoginRequest};
-use crate::components::{Button, Card};
+use crate::api::google::take_flash;
+use crate::components::{Button, Card, GoogleButton};
 use leptos::*;
 use leptos_router::*;
 
@@ -7,7 +8,8 @@ use leptos_router::*;
 pub fn Login() -> impl IntoView {
     let (email, set_email) = create_signal(String::new());
     let (password, set_password) = create_signal(String::new());
-    let (error, set_error) = create_signal(None::<String>);
+    // Un fallo del flujo de Google llega como aviso guardado antes de volver aquí
+    let (error, set_error) = create_signal(take_flash().filter(|f| f.is_error).map(|f| f.message));
     let (loading, set_loading) = create_signal(false);
 
     let navigate = use_navigate();
@@ -155,6 +157,8 @@ pub fn Login() -> impl IntoView {
                             </a>
                         </p>
                     </form>
+
+                    <GoogleButton label="Continuar con Google" />
                 </Card>
 
                 // Footer

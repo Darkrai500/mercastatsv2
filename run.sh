@@ -37,8 +37,23 @@ env_get() {
 # Preparación
 # ---------------------------------------------------------------------------
 
+# Clave con la que el backend cifra los tokens de Google. Se añade también a los .env que ya
+# existían, para que activar el inicio de sesión con Google solo requiera las credenciales.
+ensure_token_key() {
+  [[ -n "$(env_get TOKEN_ENCRYPTION_KEY '')" ]] && return
+  local key
+  key="$(openssl rand -base64 32)"
+  if grep -q '^TOKEN_ENCRYPTION_KEY=' .env; then
+    sed -i.bak "s|^TOKEN_ENCRYPTION_KEY=.*|TOKEN_ENCRYPTION_KEY=${key}|" .env
+    rm -f .env.bak
+  else
+    printf '\n# Clave AES-256 para cifrar los tokens de Google en la BD (generada por run.sh)\nTOKEN_ENCRYPTION_KEY=%s\n' "$key" >> .env
+  fi
+  say "Generada TOKEN_ENCRYPTION_KEY en .env"
+}
+
 ensure_env() {
-  [[ -f .env ]] && return
+  if [[ -f .env ]]; then ensure_token_key; return; fi
   say "Creando .env con secretos aleatorios (solo la primera vez)"
   local db_password jwt_secret
   db_password="$(openssl rand -hex 16)"
@@ -48,6 +63,7 @@ ensure_env() {
       -e "s|^JWT_SECRET=.*|JWT_SECRET=${jwt_secret}|" \
       .env.example > .env
   chmod 600 .env
+  ensure_token_key
 }
 
 ensure_docker() {
@@ -99,6 +115,20 @@ except Exception as exc:
 PY
 }
 
+# docker-compose solo ejecuta los scripts de initdb con el volumen vacío, así que una base de
+# datos ya existente no recibe las migraciones nuevas. Las posteriores a la 0002 son
+# idempotentes y se aplican aquí en cada arranque.
+apply_migrations() {
+  local file user db
+  user="$(env_get POSTGRES_USER mercastats_app)"; db="$(env_get POSTGRES_DB mercastats)"
+  for file in backend/migrations/0*.sql; do
+    case "$(basename "$file")" in 0001_*|0002_*) continue ;; esac
+    docker exec -i -e PGOPTIONS='-c client_min_messages=warning' mercastats_db \
+      psql -v ON_ERROR_STOP=1 -q -U "$user" -d "$db" < "$file" >/dev/null \
+      || die "No se pudo aplicar la migración $(basename "$file")"
+  done
+}
+
 ensure_db() {
   ensure_docker
   local running port free
@@ -115,7 +145,7 @@ ensure_db() {
   local status
   for _ in $(seq 1 45); do
     status="$(docker inspect -f '{{.State.Health.Status}}' mercastats_db 2>/dev/null || true)"
-    [[ "$status" == "healthy" ]] && { verify_db_login; return; }
+    [[ "$status" == "healthy" ]] && { verify_db_login; apply_migrations; return; }
     sleep 2
   done
   die "PostgreSQL no llegó a estar sano. Revisa:  docker compose logs db"
@@ -208,6 +238,9 @@ EOF
 
 mode_docker() {
   ensure_env; ensure_docker
+  say "Levantando PostgreSQL y aplicando migraciones"
+  docker compose up -d --wait db
+  apply_migrations
   say "Construyendo y levantando todo el stack (Ctrl+C para parar)"
   cat <<EOF
   Aplicación    http://localhost:$(env_get FRONTEND_PORT 3000)

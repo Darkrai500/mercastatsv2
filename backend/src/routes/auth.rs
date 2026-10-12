@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{extract::State, routing::post, Json, Router};
 use sqlx::PgPool;
 
@@ -6,7 +8,10 @@ use crate::{
     db,
     error::AppResult,
     schema::{AuthResponse, LoginRequest, RegisterRequest, UserInfo},
-    services::{generate_jwt, hash_password, verify_password, IntelligenceClient},
+    services::{
+        generate_jwt, google_integration::GoogleIntegration, hash_password, verify_password,
+        IntelligenceClient,
+    },
 };
 
 /// Estado compartido del servidor
@@ -15,6 +20,8 @@ pub struct AppState {
     pub db_pool: PgPool,
     pub config: AppConfig,
     pub intelligence_client: IntelligenceClient,
+    /// Inicio de sesión con Google + Gmail (None si no hay credenciales configuradas)
+    pub google: Option<Arc<GoogleIntegration>>,
 }
 
 /// Handler para registro de usuario
@@ -94,8 +101,15 @@ pub async fn login(
             crate::error::AppError::Unauthorized("Credenciales inválidas".to_string())
         })?;
 
+    // Las cuentas creadas con Google no tienen contraseña
+    let Some(password_hash) = user.password_hash.as_deref() else {
+        return Err(crate::error::AppError::Unauthorized(
+            "Esta cuenta usa Google. Pulsa «Continuar con Google» para entrar".to_string(),
+        ));
+    };
+
     // Verificar contraseña
-    let password_valid = verify_password(&req.password, &user.password_hash)?;
+    let password_valid = verify_password(&req.password, password_hash)?;
     if !password_valid {
         return Err(crate::error::AppError::Unauthorized(
             "Credenciales inválidas".to_string(),
@@ -127,5 +141,6 @@ pub fn auth_router(state: AppState) -> Router {
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
+        .merge(super::google_auth::google_routes())
         .with_state(state)
 }

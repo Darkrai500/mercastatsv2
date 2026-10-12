@@ -1,11 +1,15 @@
 mod config;
 mod db;
 mod error;
+#[cfg(test)]
+mod google_flow_tests;
 mod middleware;
 mod models;
 mod routes;
 mod schema;
 mod services;
+#[cfg(test)]
+mod test_support;
 
 use axum::{
     http::{header, HeaderValue, Method},
@@ -14,11 +18,13 @@ use axum::{
 };
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use config::AppConfig;
 use routes::auth::AppState;
-use services::IntelligenceClient;
+use services::{google_integration::GoogleIntegration, IntelligenceClient};
 
 /// Health check endpoint
 async fn health() -> &'static str {
@@ -66,12 +72,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::info!("Servicio de inteligencia disponible");
     }
 
+    // Inicio de sesion con Google + sincronizacion de Gmail (opcional)
+    let google = match &config.google {
+        Some(google_config) => {
+            tracing::info!("Integracion con Google activada");
+            Some(Arc::new(GoogleIntegration::new(
+                google_config,
+                &config.gmail_ticket_sender,
+            )?))
+        }
+        None => {
+            tracing::info!(
+                "Integracion con Google desactivada (faltan GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET)"
+            );
+            None
+        }
+    };
+
     // Crear estado de la aplicacion
     let state = AppState {
         db_pool: pool,
         config: config.clone(),
         intelligence_client: intelligence_client.clone(),
+        google,
     };
+
+    // Sincronizacion periodica de las cuentas de Gmail conectadas
+    if state.google.is_some() && config.gmail_sync_interval_minutes > 0 {
+        let interval = Duration::from_secs(config.gmail_sync_interval_minutes * 60);
+        tracing::info!(
+            "Sincronizacion de Gmail cada {} minutos",
+            config.gmail_sync_interval_minutes
+        );
+        tokio::spawn(services::gmail_sync::run_scheduler(state.clone(), interval));
+    }
 
     let allowed_origins = config
         .cors_origins
@@ -87,6 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health))
         .nest("/api/auth", routes::auth_router(state.clone()))
+        .nest("/api/gmail", routes::gmail_router(state.clone()))
         .nest("/api/ocr", routes::ocr_router(state.clone()))
         .nest("/api/tickets", routes::tickets_router(state.clone()))
         .nest("/api/stats", routes::stats_router(state.clone()))

@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
     pub email: String,
+    /// `None` en las cuentas creadas con Google (no tienen contraseña)
     #[serde(skip_serializing)]
-    pub password_hash: String,
+    pub password_hash: Option<String>,
     pub nombre: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,

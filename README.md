@@ -23,6 +23,7 @@ Usa únicamente datos sintéticos o no sensibles. El repositorio no promete borr
 
 - Registro e inicio de sesión con contraseñas protegidas mediante bcrypt y sesiones JWT.
 - Ingesta de tickets PDF e imagen, con normalización de productos y persistencia relacional.
+- Inicio de sesión con Google y sincronización automática de los tickets digitales que Mercadona envía por correo (opcional, ver [más abajo](#inicio-de-sesión-con-google-y-sincronización-con-gmail)).
 - Dashboard de gasto, historial de tickets y estadísticas agregadas.
 - Predicción de la próxima compra (día y hora, gasto estimado y productos que toca reponer) mediante un modelo estadístico por usuario en el microservicio Python.
 - Contenedores independientes y comprobaciones de salud para los servicios.
@@ -88,6 +89,39 @@ docker compose down
 
 Añade `--volumes` solo si también quieres eliminar la base de datos local.
 
+## Inicio de sesión con Google y sincronización con Gmail
+
+Opcional. Con credenciales de Google configuradas, el login y el registro muestran el botón **Continuar con Google**. Un único consentimiento da identidad y acceso de **solo lectura** a Gmail; a partir de ahí Mercastats:
+
+1. busca en la bandeja los correos de `ticket_digital@mail.mercadona.com` con un PDF adjunto,
+2. pasa cada PDF por el mismo OCR y la misma ingesta que la subida manual,
+3. lo repite solo cada 30 minutos (y al pulsar **Sincronizar ahora** en «Subir tickets»).
+
+Cada correo se procesa una sola vez, y un ticket que ya está en la base de datos (subido a mano o importado antes) se cuenta como duplicado en lugar de repetirse. Sin `GOOGLE_CLIENT_ID` ni `GOOGLE_CLIENT_SECRET` la función queda desactivada y el botón no aparece.
+
+### Configuración en Google Cloud
+
+1. En [Google Cloud Console](https://console.cloud.google.com/) crea un proyecto y habilita la **Gmail API** (APIs y servicios → Biblioteca).
+2. En **Pantalla de consentimiento de OAuth** elige *Externo*, rellena el nombre y el correo de contacto, añade el ámbito `https://www.googleapis.com/auth/gmail.readonly` (además de `openid`, `email` y `profile`) y, mientras la app esté en modo *Pruebas*, añade tu correo como **usuario de prueba**.
+3. En **Credenciales** crea un *ID de cliente de OAuth* de tipo *Aplicación web* con la URI de redireccionamiento autorizada `http://localhost:3000/api/auth/google/callback` (en un despliegue real, la URL HTTPS equivalente del frontend).
+4. Copia el ID y el secreto a `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) y relanza `./run.sh`. `TOKEN_ENCRYPTION_KEY` la genera el propio script si falta.
+
+| Variable | Para qué sirve |
+| --- | --- |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Credenciales OAuth. Ambas o ninguna. |
+| `GOOGLE_REDIRECT_URI` | Debe coincidir exactamente con la registrada en Google (por defecto, la de `localhost:3000`). |
+| `TOKEN_ENCRYPTION_KEY` | Clave AES-256 (32 bytes en base64) que cifra en la base de datos el token de acceso permanente. Si se cambia, hay que volver a conectar Gmail. |
+| `GMAIL_TICKET_SENDER` | Remitente cuyos correos se importan. |
+| `GMAIL_SYNC_INTERVAL_MINUTES` | Cada cuánto se sincroniza (`0` = solo a mano). |
+
+### Qué conviene saber
+
+- **`gmail.readonly` es un ámbito restringido de Google.** En modo *Pruebas* solo pueden entrar los usuarios de prueba que añadas (máximo 100), aparece el aviso de «app no verificada» y, según la documentación de Google, **el token de acceso permanente caduca a los 7 días**: Mercastats lo detecta y muestra «Requiere reconexión». Pasar el proyecto a *En producción* evita esa caducidad semanal para uso personal; abrirlo a usuarios generales exige que Google verifique la aplicación (y, al guardar datos de Gmail en un servidor, una evaluación de seguridad externa periódica).
+- **Qué se guarda:** el token cifrado, el PDF de cada ticket (igual que en la subida manual) y los identificadores de los correos ya procesados. No se almacenan asuntos ni cuerpos de correo. El permiso es de solo lectura, pero Google no ofrece uno más estrecho que «solo los correos de un remitente»: esa restricción la aplica Mercastats en su búsqueda.
+- **Cuentas:** entrar con Google crea una cuenta sin contraseña. Si ya existe una cuenta con contraseña para ese email, Google **no se enlaza solo** (el registro con contraseña no verifica el correo): inicia sesión con tu contraseña y pulsa **Conectar Gmail**. El Gmail conectado no tiene que coincidir con el email de la cuenta.
+- **Desconectar** revoca el acceso en Google y borra el token; los tickets ya importados se conservan.
+- **Problemas frecuentes:** `redirect_uri_mismatch` → la URI de Google Cloud no coincide con `GOOGLE_REDIRECT_URI`; «Acceso bloqueado: la app no ha completado la verificación» → falta tu correo como usuario de prueba; «Gmail denegó el acceso» → la Gmail API no está habilitada en el proyecto.
+
 ## Desarrollo y comprobaciones
 
 Backend Rust, con PostgreSQL levantado y el esquema aplicado:
@@ -137,6 +171,7 @@ docker-compose.yml     Orquestación local del stack principal
 ## Limitaciones conocidas
 
 - La extracción está especializada en formatos de Mercadona; no es un parser universal de recibos.
+- La sincronización con Gmail asume que el ticket llega como PDF adjunto desde la dirección configurada. Sus pruebas automáticas usan un Gmail simulado con datos sintéticos; no se han contrastado con correos reales de Mercadona.
 - La predicción necesita al menos 5 días con compra para mostrarse y su confianza es deliberadamente conservadora con historiales cortos. No modela festivos ni cambios de hábito recientes.
 - La configuración local no debe reutilizar secretos ni credenciales de producción.
 - Antes de subir un ticket real, revisa su contenido: un recibo puede incluir datos de pago, localización y hábitos de compra.

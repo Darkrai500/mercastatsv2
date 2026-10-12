@@ -1,5 +1,5 @@
 use crate::api::auth::{register_user, RegisterRequest};
-use crate::components::{Button, Card};
+use crate::components::{Button, Card, GoogleButton};
 use leptos::*;
 use leptos_router::*;
 
@@ -187,6 +187,8 @@ pub fn Register() -> impl IntoView {
                             </a>
                         </p>
                     </form>
+
+                    <GoogleButton label="Registrarse con Google" />
                 </Card>
 
                 // Footer

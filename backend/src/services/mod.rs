@@ -1,4 +1,9 @@
 pub mod auth;
+pub mod crypto;
+pub mod gmail;
+pub mod gmail_sync;
+pub mod google;
+pub mod google_integration;
 pub mod intelligence;
 pub mod intelligence_client;
 pub mod ocr;

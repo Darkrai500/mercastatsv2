@@ -1,10 +1,13 @@
 pub mod auth;
+pub mod gmail;
+pub mod google_auth;
 pub mod intelligence;
 pub mod ocr;
 pub mod stats;
 pub mod tickets;
 
 pub use auth::auth_router;
+pub use gmail::gmail_router;
 pub use ocr::ocr_router;
 pub use stats::stats_router;
 pub use tickets::tickets_router;

@@ -1,5 +1,6 @@
 pub mod dashboard;
 pub mod example;
+pub mod google_callback;
 pub mod history;
 pub mod login;
 pub mod monthly_evolution;
@@ -9,6 +10,7 @@ pub mod stats;
 pub mod upload;
 
 pub use dashboard::Dashboard;
+pub use google_callback::GoogleCallback;
 pub use history::TicketHistory;
 pub use login::Login;
 pub use monthly_evolution::MonthlyEvolution;

@@ -16,6 +16,9 @@ open = false
 
 [[proxy]]
 backend = "http://127.0.0.1:8000/api/"
+# Por defecto el proxy sigue las redirecciones del backend él mismo. El inicio de sesión con
+# Google responde con 302 hacia accounts.google.com y la redirección tiene que llegar al navegador.
+no_redirect = true
 
 [clean]
 cargo = true

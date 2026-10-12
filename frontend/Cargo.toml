@@ -38,6 +38,9 @@ web-sys = { version = "0.3", features = [
     "DragEvent",
     "ClipboardEvent",
     "DataTransfer",
+    "Location",
+    "History",
+    "UrlSearchParams",
 ] }
 
 # Logging
