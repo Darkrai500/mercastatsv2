@@ -55,6 +55,8 @@ as_root() {
 
 # shellcheck source=scripts/install-pacman.sh
 source scripts/install-pacman.sh
+# shellcheck source=scripts/ensure-docker.sh
+source scripts/ensure-docker.sh
 
 install_packages() {
   (($#)) || return 0
@@ -176,43 +178,6 @@ ensure_env() {
   ensure_token_key
 }
 
-ensure_docker() {
-  if ! have docker; then
-    case "$PKG" in
-      brew) say "Instalando OrbStack para Docker"; brew install --cask orbstack ;;
-      pacman) install_packages docker docker-compose ;;
-      apt) install_packages docker.io docker-compose-v2 ;;
-      dnf) install_packages moby-engine docker-compose-plugin ;;
-      zypper) install_packages docker docker-compose ;;
-    esac
-  fi
-  if ! docker compose version >/dev/null 2>&1; then
-    case "$PKG" in
-      pacman|zypper) install_packages docker-compose ;;
-      apt) install_packages docker-compose-v2 ;;
-      dnf) install_packages docker-compose-plugin ;;
-      brew) die "Falta Docker Compose v2. Actualiza OrbStack o Docker Desktop." ;;
-    esac
-    docker compose version >/dev/null 2>&1 || die "No se pudo instalar Docker Compose v2."
-  fi
-  docker info >/dev/null 2>&1 && return
-  say "Arrancando el motor de Docker…"
-  if [[ "$OS" == macos ]]; then
-    if   [[ -d /Applications/OrbStack.app ]]; then open -a OrbStack
-    elif [[ -d /Applications/Docker.app   ]]; then open -a Docker
-    else die "Docker no responde y no encuentro OrbStack ni Docker Desktop en /Applications."; fi
-  elif have systemctl && [[ ! -f /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
-    as_root systemctl start docker || die "No pude arrancar Docker. Revisa: systemctl status docker"
-  else
-    die "Docker no responde. En WSL activa la integración de Docker Desktop; en Linux inicia el daemon de Docker."
-  fi
-  for _ in $(seq 1 60); do
-    docker info >/dev/null 2>&1 && return
-    sleep 2
-  done
-  die "Docker no respondió en 2 minutos. Si tu usuario no tiene acceso al socket, añade tu usuario al grupo docker y abre una sesión nueva."
-}
-
 # ¿Hay algo escuchando en este puerto del loopback? La conexión TCP detecta
 # incluso procesos de otros usuarios, a diferencia de algunas consultas a lsof.
 port_busy() {
@@ -257,7 +222,7 @@ apply_migrations() {
   user="$(env_get POSTGRES_USER mercastats_app)"; db="$(env_get POSTGRES_DB mercastats)"
   for file in backend/migrations/0*.sql; do
     case "$(basename "$file")" in 0001_*|0002_*) continue ;; esac
-    docker exec -i -e PGOPTIONS='-c client_min_messages=warning' mercastats_db \
+    docker_cmd exec -i -e PGOPTIONS='-c client_min_messages=warning' mercastats_db \
       psql -v ON_ERROR_STOP=1 -q -U "$user" -d "$db" < "$file" >/dev/null \
       || die "No se pudo aplicar la migración $(basename "$file")"
   done
@@ -266,7 +231,7 @@ apply_migrations() {
 ensure_db() {
   ensure_docker
   local running port free
-  running="$(docker inspect -f '{{.State.Running}}' mercastats_db 2>/dev/null || echo false)"
+  running="$(docker_cmd inspect -f '{{.State.Running}}' mercastats_db 2>/dev/null || echo false)"
   port="$(env_get POSTGRES_PORT 5432)"
   if [[ "$running" != "true" ]] && port_busy "$port"; then
     for free in 5433 5434 5435 5436 5437; do port_busy "$free" || break; done
@@ -275,10 +240,10 @@ ensure_db() {
     set_db_port "$free"
   fi
   say "Levantando PostgreSQL (Docker)"
-  docker compose up -d db
+  docker_cmd compose up -d db
   local status
   for _ in $(seq 1 45); do
-    status="$(docker inspect -f '{{.State.Health.Status}}' mercastats_db 2>/dev/null || true)"
+    status="$(docker_cmd inspect -f '{{.State.Health.Status}}' mercastats_db 2>/dev/null || true)"
     [[ "$status" == "healthy" ]] && { verify_db_login; apply_migrations; return; }
     sleep 2
   done
@@ -464,7 +429,7 @@ EOF
 mode_docker() {
   ensure_env; ensure_docker
   say "Levantando PostgreSQL y aplicando migraciones"
-  docker compose up -d --wait db
+  docker_cmd compose up -d --wait db
   apply_migrations
   say "Construyendo y levantando todo el stack (Ctrl+C para parar)"
   cat <<EOF
@@ -472,7 +437,7 @@ mode_docker() {
   API           http://localhost:$(env_get BACKEND_PORT 8000)/health
   Inteligencia  http://localhost:$(env_get INTELLIGENCE_PORT 8001)/health
 EOF
-  exec docker compose up --build
+  exec "${DOCKER_CMD[@]}" compose up --build
 }
 
 mode_test() {
@@ -489,7 +454,7 @@ mode_test() {
 
 mode_stop() {
   ensure_docker
-  docker compose down
+  docker_cmd compose down
   say "Base de datos detenida (volumen conservado; usa 'docker compose down --volumes' para borrarla)"
 }
 
