@@ -11,7 +11,7 @@ Mercastats convierte tickets de compra en un historial consultable de gasto, pro
 
 ## Demo pública
 
-El despliegue previsto para la demo está en [mercastats.app](https://mercastats.app/). En la comprobación del 14 de julio de 2026 el servidor no respondió antes de agotar un tiempo de espera de 15 segundos, por lo que su disponibilidad no está garantizada. Si no carga, el proyecto puede ejecutarse localmente con Docker siguiendo las instrucciones de abajo.
+El despliegue previsto para la demo estará proximamente en [mercastats.app](https://mercastats.app/). En la comprobación del 14 de julio de 2026 el servidor no respondió antes de agotar un tiempo de espera de 15 segundos, por lo que su disponibilidad no está garantizada. Si no carga, el proyecto puede ejecutarse localmente con Docker siguiendo las instrucciones de abajo.
 
 | Usuario | Contraseña |
 | --- | --- |
