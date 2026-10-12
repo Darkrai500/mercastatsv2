@@ -58,7 +58,7 @@ install_packages() {
   say "Instalando paquetes del sistema: $*"
   case "$PKG" in
     brew) have brew || die "Instala Homebrew desde https://brew.sh y vuelve a ejecutar ./run.sh"; brew install "$@" ;;
-    pacman) as_root pacman -S --needed --noconfirm "$@" || die "Falló pacman. Si hay errores 404 o paquetes desincronizados, ejecuta sudo pacman -Syu y reintenta." ;;
+    pacman) as_root pacman -S --needed --noconfirm "$@" || die "Falló pacman sin instalar los paquetes. Si aparecen 404 o firmas inválidas, ejecuta sudo pacman -Syu y después ./run.sh. Si la actualización falla por mirrors, ejecuta sudo cachyos-rate-mirrors y repite sudo pacman -Syu. No uses pacman -Sy por separado." ;;
     apt) as_root apt-get update; as_root apt-get install -y "$@" ;;
     dnf) as_root dnf install -y "$@" ;;
     zypper) as_root zypper --non-interactive install "$@" ;;
