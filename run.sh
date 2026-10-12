@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Lanzador de Mercastats para macOS: un solo comando deja todo funcionando.
+# Lanzador de Mercastats para macOS y Linux: prepara y arranca el proyecto.
 #
 #   ./run.sh           desarrollo: PostgreSQL en Docker + servicio Python + API Rust + frontend
 #                      con recarga automática  ->  http://localhost:3000
 #   ./run.sh docker    todo el stack en contenedores (docker compose up --build)
 #   ./run.sh test      tests de Python y del backend Rust
-#   ./run.sh setup     solo prepara el entorno (.env, venv, trunk...) sin arrancar nada
+#   ./run.sh setup     instala dependencias y prepara el entorno sin arrancar la aplicación
 #   ./run.sh stop      detiene la base de datos (los datos se conservan)
 #
 # Es idempotente: la primera vez instala lo que falte; las siguientes tarda segundos.
@@ -24,7 +24,98 @@ warn() { printf '%s!!%s  %s\n' "$YELLOW" "$RESET" "$*" >&2; }
 die()  { printf '%sxx%s  %s\n' "$RED" "$RESET" "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-[[ "$(uname -s)" == "Darwin" ]] || warn "Pensado para macOS; en otros sistemas puede necesitar ajustes."
+case "$(uname -s)" in
+  Darwin) OS=macos ;;
+  Linux)  OS=linux ;;
+  *) die "Sistema no compatible con run.sh. En Windows nativo usa .\\run.ps1 desde PowerShell; en WSL2 usa este script." ;;
+esac
+say "Sistema detectado: $OS"
+
+if [[ "$OS" == linux ]]; then
+  [[ -r /etc/os-release ]] || die "No puedo identificar la distribución Linux (/etc/os-release)."
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  case " ${ID:-} ${ID_LIKE:-} " in
+    *" arch "*|*" cachyos "*) PKG=pacman ;;
+    *" debian "*|*" ubuntu "*) PKG=apt ;;
+    *" fedora "*|*" rhel "*) PKG=dnf ;;
+    *" opensuse "*|*" suse "*) PKG=zypper ;;
+    *) die "Distribución Linux sin instalador configurado: ${PRETTY_NAME:-desconocida}." ;;
+  esac
+else
+  PKG=brew
+fi
+
+as_root() {
+  if (( EUID == 0 )); then "$@"; else
+    have sudo || die "Hace falta sudo para instalar paquetes del sistema."
+    sudo "$@"
+  fi
+}
+
+install_packages() {
+  (($#)) || return 0
+  say "Instalando paquetes del sistema: $*"
+  case "$PKG" in
+    brew) have brew || die "Instala Homebrew desde https://brew.sh y vuelve a ejecutar ./run.sh"; brew install "$@" ;;
+    pacman) as_root pacman -S --needed --noconfirm "$@" ;;
+    apt) as_root apt-get update; as_root apt-get install -y "$@" ;;
+    dnf) as_root dnf install -y "$@" ;;
+    zypper) as_root zypper --non-interactive install "$@" ;;
+  esac
+}
+
+ensure_system_tools() {
+  local packages=() tool
+  case "$PKG" in
+    brew)
+      for tool in openssl curl node pkg-config; do have "$tool" || packages+=("$tool"); done
+      have python3.11 || packages+=(python@3.11)
+      have tesseract || packages+=(tesseract)
+      ;;
+    pacman)
+      for tool in openssl curl node pkg-config cc lsof; do
+        have "$tool" || case "$tool" in node) packages+=(nodejs);; cc) packages+=(base-devel);; pkg-config) packages+=(pkgconf);; *) packages+=("$tool");; esac
+      done
+      have tesseract || packages+=(tesseract tesseract-data-spa)
+      ;;
+    apt)
+      for tool in openssl curl node pkg-config cc lsof; do
+        have "$tool" || case "$tool" in node) packages+=(nodejs);; cc) packages+=(build-essential);; *) packages+=("$tool");; esac
+      done
+      have tesseract || packages+=(tesseract-ocr tesseract-ocr-spa)
+      ;;
+    dnf|zypper)
+      for tool in openssl curl node pkg-config cc lsof; do
+        have "$tool" || case "$tool" in node) packages+=(nodejs);; cc) packages+=(gcc);; *) packages+=("$tool");; esac
+      done
+      have tesseract || packages+=(tesseract)
+      ;;
+  esac
+  install_packages "${packages[@]}"
+  if [[ "$OS" == linux ]] && ! pkg-config --exists openssl; then
+    case "$PKG" in
+      pacman) install_packages openssl ;;
+      apt) install_packages libssl-dev ;;
+      dnf) install_packages openssl-devel ;;
+      zypper) install_packages libopenssl-devel ;;
+    esac
+  fi
+  if have tesseract && ! tesseract --list-langs 2>/dev/null | grep -qx spa; then
+    case "$PKG" in
+      brew) install_packages tesseract-lang ;;
+      pacman) install_packages tesseract-data-spa ;;
+      apt) install_packages tesseract-ocr-spa ;;
+      dnf) install_packages tesseract-langpack-spa ;;
+      zypper) warn "Instala el paquete de idioma español de Tesseract para OCR." ;;
+    esac
+  fi
+}
+
+sha_file() {
+  if have sha256sum; then sha256sum "$1" | cut -d' ' -f1
+  else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
 
 # Valor de una variable de .env sin ejecutar el fichero (acepta comentarios y valores raros).
 env_get() {
@@ -53,6 +144,7 @@ ensure_token_key() {
 }
 
 ensure_env() {
+  have openssl || install_packages openssl
   if [[ -f .env ]]; then ensure_token_key; return; fi
   say "Creando .env con secretos aleatorios (solo la primera vez)"
   local db_password jwt_secret
@@ -67,23 +159,47 @@ ensure_env() {
 }
 
 ensure_docker() {
-  have docker || die "Falta Docker. Instálalo con:  brew install --cask orbstack   (o Docker Desktop)"
+  if ! have docker; then
+    case "$PKG" in
+      brew) say "Instalando OrbStack para Docker"; brew install --cask orbstack ;;
+      pacman) install_packages docker docker-compose ;;
+      apt) install_packages docker.io docker-compose-v2 ;;
+      dnf) install_packages moby-engine docker-compose-plugin ;;
+      zypper) install_packages docker docker-compose ;;
+    esac
+  fi
+  if ! docker compose version >/dev/null 2>&1; then
+    case "$PKG" in
+      pacman|zypper) install_packages docker-compose ;;
+      apt) install_packages docker-compose-v2 ;;
+      dnf) install_packages docker-compose-plugin ;;
+      brew) die "Falta Docker Compose v2. Actualiza OrbStack o Docker Desktop." ;;
+    esac
+    docker compose version >/dev/null 2>&1 || die "No se pudo instalar Docker Compose v2."
+  fi
   docker info >/dev/null 2>&1 && return
   say "Arrancando el motor de Docker…"
-  if   [[ -d /Applications/OrbStack.app ]]; then open -a OrbStack
-  elif [[ -d /Applications/Docker.app   ]]; then open -a Docker
-  else die "Docker no responde y no encuentro OrbStack ni Docker Desktop en /Applications."; fi
+  if [[ "$OS" == macos ]]; then
+    if   [[ -d /Applications/OrbStack.app ]]; then open -a OrbStack
+    elif [[ -d /Applications/Docker.app   ]]; then open -a Docker
+    else die "Docker no responde y no encuentro OrbStack ni Docker Desktop en /Applications."; fi
+  elif have systemctl && [[ ! -f /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
+    as_root systemctl start docker || die "No pude arrancar Docker. Revisa: systemctl status docker"
+  else
+    die "Docker no responde. En WSL activa la integración de Docker Desktop; en Linux inicia el daemon de Docker."
+  fi
   for _ in $(seq 1 60); do
     docker info >/dev/null 2>&1 && return
     sleep 2
   done
-  die "Docker no respondió en 2 minutos. Ábrelo a mano y vuelve a lanzar ./run.sh"
+  die "Docker no respondió en 2 minutos. Si tu usuario no tiene acceso al socket, añade tu usuario al grupo docker y abre una sesión nueva."
 }
 
-# ¿Hay algo escuchando en este puerto del loopback? `nc` ve también los procesos de otros
-# usuarios (p. ej. un PostgreSQL nativo del sistema); `lsof` no.
+# ¿Hay algo escuchando en este puerto del loopback? La conexión TCP detecta
+# incluso procesos de otros usuarios, a diferencia de algunas consultas a lsof.
 port_busy() {
-  nc -z 127.0.0.1 "$1" >/dev/null 2>&1 || nc -z ::1 "$1" >/dev/null 2>&1
+  (echo >/dev/tcp/127.0.0.1/"$1") >/dev/null 2>&1 ||
+    (echo >/dev/tcp/::1/"$1") >/dev/null 2>&1
 }
 
 set_db_port() {
@@ -137,7 +253,7 @@ ensure_db() {
   if [[ "$running" != "true" ]] && port_busy "$port"; then
     for free in 5433 5434 5435 5436 5437; do port_busy "$free" || break; done
     port_busy "$free" && die "No encuentro un puerto libre para PostgreSQL (probé 5433-5437)."
-    warn "El puerto $port ya lo usa otro servidor (¿un PostgreSQL instalado en el Mac?). Uso el $free para la BD de Mercastats."
+    warn "El puerto $port ya lo usa otro servidor. Uso el $free para la BD de Mercastats."
     set_db_port "$free"
   fi
   say "Levantando PostgreSQL (Docker)"
@@ -152,32 +268,82 @@ ensure_db() {
 }
 
 ensure_python() {
-  local requirements=intelligence-service/requirements.txt stamp=.venv/.requirements.sha sum
-  if [[ ! -x .venv/bin/python ]]; then
-    say "Creando entorno virtual de Python (.venv)"
-    if have uv; then
-      uv venv .venv --python 3.12 -q 2>/dev/null || uv venv .venv -q
+  local path requirements extras stamp sum py
+  for path in .venv ocr-service/.venv; do
+    if [[ "$path" == .venv ]]; then
+      requirements=intelligence-service/requirements.txt; extras=(pytest httpx)
     else
-      have python3 || die "Falta Python 3:  brew install python"
-      python3 -m venv .venv
+      requirements=ocr-service/requirements.txt; extras=()
     fi
-  fi
-  sum="$(shasum -a 256 "$requirements" | cut -d' ' -f1)"
-  if [[ "$(cat "$stamp" 2>/dev/null || true)" != "$sum" ]]; then
-    say "Instalando dependencias de Python"
-    if have uv; then
-      uv pip install -q --python .venv/bin/python -r "$requirements" pytest httpx
-    else
-      .venv/bin/python -m pip install -q -r "$requirements" pytest httpx
+    py="$path/bin/python"; stamp="$path/.requirements.sha"
+    if [[ ! -x "$py" ]]; then
+      say "Creando entorno virtual de Python ($path, Python 3.11)"
+      if have uv; then
+        uv venv "$path" --python 3.11 --python-preference managed
+      elif have python3.11; then
+        python3.11 -m venv "$path"
+      else
+        ensure_uv
+        uv venv "$path" --python 3.11 --python-preference managed
+      fi
     fi
-    echo "$sum" > "$stamp"
-  fi
-  have tesseract || warn "Sin tesseract no se podrán leer tickets en imagen (PDF sí):  brew install tesseract"
+    sum="$(sha_file "$requirements")"
+    if [[ "$(cat "$stamp" 2>/dev/null || true)" != "$sum" ]] || ! python_deps_present "$py" "$requirements" "${extras[@]}"; then
+      say "Instalando dependencias de $requirements"
+      if have uv; then
+        uv pip install --python "$py" -r "$requirements" "${extras[@]}"
+      else
+        "$py" -m pip install -r "$requirements" "${extras[@]}"
+      fi
+      printf '%s\n' "$sum" > "$stamp"
+    fi
+  done
+}
+
+python_deps_present() {
+  local py="$1" requirements="$2"; shift 2
+  "$py" - "$requirements" "$@" <<'PY'
+import importlib.metadata as metadata
+import re
+import sys
+from pathlib import Path
+
+lines = Path(sys.argv[1]).read_text().splitlines() + sys.argv[2:]
+for line in lines:
+    line = line.split('#', 1)[0].strip()
+    if not line:
+        continue
+    name = re.split(r'[<>=!~;\[\s]', line, 1)[0]
+    try:
+        metadata.version(name)
+    except metadata.PackageNotFoundError:
+        sys.exit(1)
+PY
+}
+
+ensure_uv() {
+  have curl || install_packages curl
+  say "Instalando uv para disponer de Python 3.11"
+  local script
+  script="$(mktemp)"
+  curl -LsSf https://astral.sh/uv/install.sh -o "$script"
+  sh "$script"
+  rm -f "$script"
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+  have uv || die "No se pudo instalar uv."
 }
 
 ensure_rust() {
-  have cargo  || die "Falta Rust:  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-  have rustup || die "Falta rustup (necesario para el objetivo WebAssembly)."
+  if ! have rustup || ! have cargo; then
+    say "Instalando Rust y rustup"
+    local script
+    script="$(mktemp)"
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$script"
+    sh "$script" -y --no-modify-path
+    rm -f "$script"
+    export PATH="$HOME/.cargo/bin:$PATH"
+  fi
+  have cargo && have rustup || die "No se pudo instalar Rust."
   if ! rustup target list --installed | grep -q '^wasm32-unknown-unknown$'; then
     say "Añadiendo el objetivo wasm32-unknown-unknown"
     rustup target add wasm32-unknown-unknown
@@ -186,18 +352,27 @@ ensure_rust() {
     say "Instalando trunk (solo la primera vez)"
     if have brew; then brew install trunk; else cargo install --locked trunk; fi
   fi
+  local sum stamp=.cargo-fetch.sha
+  sum="$(sha_file Cargo.lock)"
+  if [[ "$(cat "$stamp" 2>/dev/null || true)" != "$sum" ]]; then
+    say "Descargando dependencias Rust del workspace"
+    cargo fetch --locked
+    printf '%s\n' "$sum" > "$stamp"
+  fi
 }
 
 ensure_node() {
-  have node || die "Falta Node.js (lo usa dev.js):  brew install node"
+  have node || die "No se pudo instalar Node.js (lo usa dev.js)."
 }
 
 check_port() {
   local port="$1" label="$2" pid
+  port_busy "$port" || return 0
   pid="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
   if [[ -n "$pid" ]]; then
     die "El puerto $port ($label) ya lo usa $(ps -p "$pid" -o comm= 2>/dev/null || echo '?') (PID $pid). Ciérralo y reintenta."
   fi
+  die "El puerto $port ($label) ya está ocupado. Ciérralo y reintenta."
 }
 
 # Abre el navegador cuando el frontend responde (la primera compilación tarda minutos).
@@ -206,7 +381,12 @@ open_when_ready() {
   [[ "${NO_OPEN:-0}" == "1" ]] && return 0
   (
     for _ in $(seq 1 600); do
-      if curl -sf -o /dev/null http://localhost:3000; then open http://localhost:3000; exit 0; fi
+      if curl -sf -o /dev/null http://localhost:3000; then
+        if [[ "$OS" == macos ]]; then open http://localhost:3000
+        elif have xdg-open; then xdg-open http://localhost:3000 >/dev/null 2>&1 || true
+        fi
+        exit 0
+      fi
       sleep 2
     done
   ) &
@@ -219,7 +399,7 @@ open_when_ready() {
 # ---------------------------------------------------------------------------
 
 mode_dev() {
-  ensure_env; ensure_node; ensure_python; ensure_rust; ensure_db
+  ensure_system_tools; ensure_env; ensure_node; ensure_python; ensure_rust; ensure_db
   check_port 3000 "frontend"; check_port 8000 "API"; check_port 8001 "servicio de inteligencia"
   cat <<EOF
 
@@ -251,7 +431,7 @@ EOF
 }
 
 mode_test() {
-  ensure_env; ensure_python
+  ensure_system_tools; ensure_env; ensure_python; ensure_rust
   say "Tests de Python"
   (cd intelligence-service && ../.venv/bin/python -m pytest -q)
   ensure_db
@@ -272,7 +452,7 @@ case "${1:-dev}" in
   dev|"")  mode_dev ;;
   docker)  mode_docker ;;
   test)    mode_test ;;
-  setup)   ensure_env; ensure_node; ensure_python; ensure_rust; ensure_db; say "Entorno listo. Lanza:  ./run.sh" ;;
+  setup)   ensure_system_tools; ensure_env; ensure_node; ensure_python; ensure_rust; ensure_db; say "Entorno listo. Lanza:  ./run.sh" ;;
   stop)    mode_stop ;;
   -h|--help|help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "Modo desconocido: $1  (usa: dev | docker | test | setup | stop)" ;;

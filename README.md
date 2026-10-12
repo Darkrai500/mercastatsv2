@@ -42,13 +42,21 @@ flowchart LR
 
 La separación mantiene la autenticación, la orquestación y el acceso tipado a datos en Rust, mientras reserva Python para OCR y experimentación con modelos. El cliente consume la API desde WebAssembly y Nginx actúa como servidor estático y proxy.
 
-## Arranque rápido (macOS)
+## Arranque rápido (macOS, Linux y Windows)
+
+En macOS y Linux (Arch/CachyOS, Debian/Ubuntu, Fedora o openSUSE):
 
 ```bash
 ./run.sh
 ```
 
-Un solo comando prepara lo que falte (`.env` con secretos aleatorios, entorno virtual de Python, objetivo `wasm32` de Rust y `trunk`), arranca el motor de Docker (OrbStack o Docker Desktop) si está apagado, levanta PostgreSQL y lanza el servicio Python, la API Rust y el frontend con recarga automática. Cuando el frontend termina de compilar abre <http://localhost:3000>. La primera vez tarda unos minutos; las siguientes, segundos.
+En Windows, desde PowerShell:
+
+```powershell
+.\run.ps1
+```
+
+El lanzador prepara lo que falte: `.env` con secretos aleatorios, Node.js, Rust y su objetivo WebAssembly, Trunk, Python 3.11, las dependencias de los servicios Python (inteligencia y prototipo OCR), Tesseract con español y Docker. Usa Homebrew en macOS, el gestor de paquetes de la distribución en Linux y winget en Windows. Algunas instalaciones del sistema pueden pedir privilegios de administrador; en Linux, el usuario debe tener acceso al socket de Docker. Después levanta PostgreSQL y lanza el servicio Python, la API Rust y el frontend con recarga automática. En macOS y Linux abre <http://localhost:3000> cuando responde el frontend; en Windows visita esa URL. La primera compilación puede tardar varios minutos.
 
 | Comando | Qué hace |
 | --- | --- |
@@ -58,11 +66,13 @@ Un solo comando prepara lo que falte (`.env` con secretos aleatorios, entorno vi
 | `./run.sh setup` | Solo prepara el entorno |
 | `./run.sh stop` | Detiene la base de datos (los datos se conservan) |
 
-Si el puerto 5432 ya lo usa otro PostgreSQL (por ejemplo, uno instalado en el Mac), el script usa automáticamente otro puerto libre para la base de datos de Mercastats y lo guarda en `.env`.
+En Windows, usa los mismos modos con `.\run.ps1`, por ejemplo `.\run.ps1 setup` o `.\run.ps1 docker`. El modo `docker` solo requiere Docker y no instala las herramientas nativas. En WSL2, usa `./run.sh` con la integración de Docker Desktop activada.
+
+Si el puerto 5432 ya lo usa otro PostgreSQL, el script usa automáticamente otro puerto libre para la base de datos de Mercastats y lo guarda en `.env`.
 
 ## Puesta en marcha con Docker
 
-Requisitos: Docker Desktop y Docker Compose.
+Requisitos para el arranque manual: Docker y Docker Compose v2. En Windows y macOS puedes usar Docker Desktop; el lanzador instala o prepara Docker cuando hace falta.
 
 ```bash
 cp .env.example .env

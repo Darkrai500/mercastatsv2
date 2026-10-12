@@ -20,6 +20,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .venv/
+.cargo-fetch.sha
+.tessdata/
 venv/
 env/
 *.egg-info/
